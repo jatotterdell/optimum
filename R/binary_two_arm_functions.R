@@ -68,6 +68,7 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 }
 
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
+#' using numerical integration
 #' 
 #' @param a
 #' @param b
@@ -88,6 +89,20 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
     error = function(err) NA)
 }
 
+#' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
+#' using Normal approximation.
+#' 
+#' @param a
+#' @param b
+#' @param c
+#' @param d
+#' @param delta The difference we wish to assess (i.e. X - Y > delta)
+#' 
+#' @return The value of the integral
+#' 
+#' @example beta_ineq_approx(5, 5, 3, 7)
+#' 
+#' @export
 beta_ineq_approx <- function(a, b, c, d, delta = 0) {
   m1 <- a / (a + b)
   v1 <- a*b / ( (a + b)^2 * (a + b + 1))
@@ -97,49 +112,67 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
   return(pnorm(z))
 }
 
+#' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
+#' using Monte Carlo method.
+#' 
+#' @param a
+#' @param b
+#' @param c
+#' @param d
+#' @param delta The difference we wish to assess (i.e. X - Y > delta)
+#' @param sims The number of Monte Carlo variates to generate for estimation
+#' 
+#' @return The value of the integral
+#' 
+#' @example beta_ineq_sim(5, 5, 3, 7)
+#' 
+#' @export
 beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
   X <- rbeta(sims, a, b)
   Y <- rbeta(sims, c, d)
   mean(X > Y + delta)
 }
 
-beta_ineq_sum <- function(a, b, c, d) {
-  total <- 0
-  for(i in 0:(c - 1)) {
-    total <- total + exp(lbeta(a + i, b + d) - 
-                           log(d + i) - lbeta(1 + i, d) - lbeta(a, b))
-  }
-  return(total)
-}
-
-# Simulate Bayesian two-arm trial 
-# with early termination for futility/success
-# Model:
-#  p_1      ~ beta(a, b)
-#  p_2      ~ beta(c, d)
-#  x_i|p_i  ~ binomial(n_i, p_i), k = 1...K, i = 1,2
-#  p_i|x_i  ~ beta(a + sum(x_i), b + n_i - sum(x_i))
-#
-# Hypothesis:
-#   H_0: p_1 > p_2 + d
-#   H_1: p_1 < p_2 + d
-#
-# Terimnal decision rule:
-#   Pr(p_1 < p_2 + d | x_i) > k_hi => H_1
-#   Pr(p_1 < p_2 + d | x_i) < k_lo => H_0
-#   Otherwise => inconclusive
-#
-# Interim decision rule:
-#   Pr(p_1 < p_2 + d | x_i) > k_hi => H_1
-#   Pr(p_1 < p_2 + d | x_i) < k_lo => H_0
-#
-#             OR
-#
-#   PPoS > q_hi => expect success => H_1
-#   PPoS < q_lo => futile => H_0
-#
-#   Otherwise => continue to k + 1
-
+#' Simulate Bayesian two-arm trial 
+#' with early termination for futility/success
+#' Model:
+#'  p_1      ~ beta(a, b)
+#'  p_2      ~ beta(c, d)
+#'  x_i|p_i  ~ binomial(n_i, p_i), k = 1...K, i = 1,2
+#'  p_i|x_i  ~ beta(a + sum(x_i), b + n_i - sum(x_i))
+#'
+#' Hypothesis:
+#'   H_0: p_1 > p_2 + d
+#'   H_1: p_1 < p_2 + d
+#'
+#' Terimnal decision rule:
+#'   Pr(p_1 < p_2 + d | x_i) > k_hi => H_1
+#'   Pr(p_1 < p_2 + d | x_i) < k_lo => H_0
+#'   Otherwise => inconclusive
+#'
+#' Interim decision rule:
+#'   Pr(p_1 < p_2 + d | x_i) > k_hi => H_1
+#'   Pr(p_1 < p_2 + d | x_i) < k_lo => H_0
+#'
+#'            OR
+#'
+#'   PPoS > q_hi => expect success => H_1
+#'   PPoS < q_lo => futile => H_0
+#'
+#'   Otherwise => continue to k + 1
+#'   
+#' @param sim_id
+#' @param p1tru True value for response rate arm 1
+#' @param p2tru True value for response rate arm 2
+#' @param delta Relative difference of interest (X - Y > delta)
+#' @param n1int Individuals with follow-up at each interim arm 1
+#' @param n2int Individuals with follow-up at each interim arm 2
+#' @param a1 Prior parameter arm 1
+#' @param b1 Prior parameter arm 1
+#' @param a2 Prior parameter arm 2
+#' @param b2 Prior parameter arm 2
+#' 
+#' @export
 sim_trial <- function(
   sim_id = 1,
   p1tru  = 0.1,
@@ -147,10 +180,10 @@ sim_trial <- function(
   delta  = 0.0,
   n1int  = seq(100, 500, 50),
   n2int  = seq(100, 500, 50),
-  a      = 1,
-  b      = 1,
-  c      = 1,
-  d      = 1,
+  a1      = 1,
+  b1      = 1,
+  a2      = 1,
+  b2      = 1,
   post_method = "exact"
 ) {
   
@@ -178,18 +211,18 @@ sim_trial <- function(
     y2curr <- y2[interim]
     n1curr <- n1int[interim]
     n2curr <- n2int[interim]
-    apost <- a + y1curr
-    bpost <- b + n1curr - y1curr
-    cpost <- c + y2curr
-    dpost <- d + n2curr - y2curr
+    a1post <- a1 + y1curr
+    b1post <- b1 + n1curr - y1curr
+    a2post <- a2 + y2curr
+    b2post <- b2 + n2curr - y2curr
     
     # Posterior probability of p_1 > p_2
-    ptail <- calc_post(apost, bpost, cpost, dpost, delta)
+    ptail <- calc_post(a1post, b1post, a2post, b2post, delta)
     
     return(c(n1 = n1curr, n2 = n2curr, 
              x1 = x1[interim], x2 = x2[interim],
              y1 = y1curr, y2 = y2curr,
-             a = apost, b = bpost, c = cpost, d = dpost, 
+             a1 = a1post, b1 = b1post, a2 = a2post, b2 = b2post, 
              ptail = ptail))
   }
   # Iterate through all the interims
@@ -201,6 +234,11 @@ sim_trial <- function(
   return(as.data.table(sim_trial))
 }
 
+#' Simulate a set of Bayesian two-arm trials
+#' with early termination for futility/success
+#' for a given scenario.
+#' 
+#' @export
 sim_scenario <- function(sims, ...) {
   res <- lapply(1:sims, function(i, ...) sim_trial(i, ...), ...)
   return(rbindlist(res))
@@ -234,16 +272,16 @@ calc_trial_ppos <- function(
     if ((m1int > 0) || (m2int > 0)) {
       
       if (ppos_method == "sim") {
-        y1pred <- rbetabinom(pp_sim, m1int[i], trial$a[i], trial$b[i])
-        y2pred <- rbetabinom(pp_sim, m2int[i], trial$c[i], trial$d[i])
+        y1pred <- rbetabinom(pp_sim, m1int[i], trial$a1[i], trial$b1[i])
+        y2pred <- rbetabinom(pp_sim, m2int[i], trial$a2[i], trial$b2[i])
         
         # No point computing posterior for duplicate values
         # just do once and multiply by the frequency
         ypred <- data.table(y1pred, y2pred)[, .N, by = .(y1pred, y2pred)]
-        ypred[, P := Vectorize(calc_post)(trial$a[i] + y1pred, 
-                                          trial$b[i] + m1int[i] - y1pred, 
-                                          trial$c[i] + y2pred,
-                                          trial$d[i] + m2int[i] - y2pred)]
+        ypred[, P := Vectorize(calc_post)(trial$a1[i] + y1pred, 
+                                          trial$b1[i] + m1int[i] - y1pred, 
+                                          trial$a2[i] + y2pred,
+                                          trial$b2[i] + m2int[i] - y2pred)]
         ppos[i] <- ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
       }
       
@@ -294,28 +332,28 @@ decide_trial <- function(
         res <- which.min(c(fut, suc))
         int <- min(c(fut, suc), na.rm = TRUE)
         list(res = switch(res, "futile", "expect success"),
-             int = int,
+             stage = int,
              fut_k = paste(fut_k, collapse = ","),
              suc_k = paste(suc_k, collapse = ","),
              inf_k = inf_k,
              sup_k = sup_k,
-             a = a[int],
-             b = b[int],
-             c = c[int],
-             d = d[int])
+             a1 = a1[int],
+             b1 = b1[int],
+             a2 = a2[int],
+             b2 = b2[int])
       } else {
         inf <- tail(ptail, 1) < tail(inf_k, 1)
         sup <- tail(ptail, 1) > tail(sup_k, 1)
         list(res = ifelse(inf, "inferior", ifelse(sup, "superior", "inconclusive")),
-             int = .N,
+             stage = .N,
              fut_k = paste(fut_k, collapse = ","),
              suc_k = paste(suc_k, collapse = ","),
              inf_k = inf_k,
              sup_k = sup_k,
-             a = a[.N],
-             b = b[.N],
-             c = c[.N],
-             d = d[.N])
+             a1 = a1[.N],
+             b1 = b1[.N],
+             a2 = a2[.N],
+             b2 = b2[.N])
       }
     }, by = sim_id]
 }
@@ -323,9 +361,9 @@ decide_trial <- function(
 
 plot_trial <- function(trial, par_seq) {
   if(requireNamespace(ggridges, quietly = TRUE)) {
-    d1 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, a, b)), by = .(stage, s1 = a, s2 = b)], 
+    d1 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, a1, b1)), by = .(stage, s1 = a1, s2 = b1)], 
                id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "1", par = par_seq)]
-    d2 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, c, d)), by = .(stage, s1 = c, s2 = d)], 
+    d2 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, a2, b2)), by = .(stage, s1 = a2, s2 = b2)], 
                id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "2", par = par_seq)]
     d <- rbindlist(list(d1, d2))
     ggplot(d,

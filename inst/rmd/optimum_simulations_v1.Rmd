@@ -181,20 +181,24 @@ $$
 
 # Simulations
 
+Parameters we need to configure are:
+
+  * $\underline c_K, \overline c_K$ - the bounds used at the final analysis for decisions
+  * $q_k$ - the bounds used for determining posterior probability of success in $\text{PPos}_k$ (should this just be $\overline c_K$?)
 
 ```{r}
 source("r/binary_two_arm_functions.R")
 n_foll <- seq(500, 3000, 500)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
-sce <- sim_scenario(500, p1tru = 0.11, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+sce <- sim_scenario(100, p1tru = 0.11, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
 
-system.time(sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.95, 
+system.time(sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.9, 
                                         post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final"))
-system.time(sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.95, 
+system.time(sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.9, 
                                             m1int = n_miss, m2int = n_miss, 
                                             post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim"))
-res <- decide_trial(sce_ppos, fut_k = seq(0.01, 0.1, length.out = 5))
+res <- decide_trial(sce_ppos)
 
 # This makes sense, from n = 750 onwards the interim and final have
 # the same prospective sample size, for n = 250, 500 the final analysis

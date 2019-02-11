@@ -1,4 +1,3 @@
-
 ## With R 3.1.0 or later, you can uncomment the following line to tell R to 
 ## enable compilation with C++11 (where available)
 ##
@@ -8,7 +7,21 @@
 ##
 ## And with R 3.4.0, and RcppArmadillo 0.7.960.*, we turn C++11 on as OpenMP
 ## support within Armadillo prefers / requires it
-CXX_STD = CXX11
+CXX_STD = CXX14
 
 PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) 
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+
+all: $(SHLIB)
+
+clean:
+		RM -rf stan_files/*.o
+		RM -rf *.so *.o
+		RM -rf stan_files/*.cc
+		RM -rf stan_files/*.hpp
+
+%.cc: %.stan
+				"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "source(file.path('..', 'tools', 'make_cc.R')); make_cc(commandArgs(TRUE))" $<
+
+				
+.phony: clean

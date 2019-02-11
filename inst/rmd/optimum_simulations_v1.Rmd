@@ -1,0 +1,216 @@
+---
+title: "Optimum Simulations"
+subtitle: "wP vs aP"
+author: "Prepared by: James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	eval = FALSE,
+	fig.align = "center",
+	fig.height = 3,
+	fig.pos = "H",
+	fig.width = 6,
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+options(stringsAsFactors = FALSE)
+
+knitr::opts_knit$set(root.dir = '../..')
+```
+
+
+```{r pkgs}
+library(ggplot2)
+library(data.table)
+library(tidyverse)
+library(tidybayes)
+
+theme_set(theme_bw())
+```
+
+
+```{r stan}
+library(rstan)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+stan_logreg <- stan_model("stan/logreg.stan")
+stan_logreg_np <- stan_model("stan/logreg_nopred.stan")
+```
+
+# Background and Rationale
+
+The aim is to o assess the allergy-preventive benefit and the safety of using wP as the first infant pertussis vaccine dose, compared with using aP for all doses.
+
+# Primary Outcome
+
+The primary outcome is challenge-proven IgE-mediated food allergy by age 18-months.
+
+The end-point is challenge-proven IgE-mediated food allergy at 18-months.
+
+\clearpage
+
+# Sample size and accrual
+
+The end-point is food allergy at 18-months. For simplicity, assume babies are enrolled and randomised at 0 months of age. Then no follow-up data is available until 18-months after the first infant is enrolled.
+
+Suppose accrual is 20 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 1,560 infants (78 weeks $\times$ 20 per week). The minimum acrrual rate needed to enroll 3,000 infants over 5 years is about 11.5 per week. At this rate, by the time we have follow-up on the first individual we would have enrolled 780 infants.
+
+```{r}
+H <- function(x) as.numeric(x>0)
+
+weeks_followup <- 78
+per_week_accrual <- 20
+week <- seq(0, (52*6), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 100))
+d$anyfollowup <- as.numeric(d$followup > 0)
+
+ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Responded"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 2500, 500)) +
+  labs(x = "Week", y = "Number enrolled/follow-up")
+
+weeks_followup <- 78
+per_week_accrual <- 12
+week <- seq(0, (52*6), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 100))
+d$anyfollowup <- as.numeric(d$followup > 0)
+
+ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Responded"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 2500, 500)) +
+  labs(x = "Week", y = "Number enrolled/follow-up")
+```
+
+\clearpage
+
+# Statistical Analysis
+
+## Model
+
+Let $\theta_a$ be the proportion of infants with food allergy who received the acellular pertussis vaccine, and $\theta_w$ the proportion of infants wit hfood allergy who received the whole-cell pertussis vaccine. We are interested in estimating $\delta = \theta_w - \theta_a$ and our hypothesis corresponds to
+$$
+\begin{aligned}
+H_0: \delta &\geq 0 \\
+H_1: \delta &< 0
+\end{aligned}
+$$
+That is, that $\theta_w$ is no improvement over $\theta_a$ versus $\theta_w$ is lower than $\theta_a$.
+
+We could approach this in two ways:
+
+  * We might model $\theta_a$ and $\theta_w$ directly using independent Beta-Binomial models and integrate over the random variable $\delta$ to obtain posterior probabilities. The advantage is simplicity.
+  * We might model $\theta_a = 1 / (1 + \exp(\beta_0)$, and $\theta_b = 1/(1+\exp(-\beta_0-\beta_1))$, that is as a logistic regression model, where $\delta = \beta_2$ is our parameter of interest (the difference in log-odds). The advantage we can incorporate more complexity (subgroups, partial pooling etc).
+  
+Given the lengthy delay in information, we will likely utilise posterior predictive probabilities at any interim analyses to impute the as yet unobserved data.
+
+## Independent Beta-Binomial Models
+
+Suppose that at each analysis $k=1,...,K$ we have data on $n_k^i$ individuals with $y_k^i$ responses for $i\in\{a,w\}$. We also assume that we have $m_k^i\geq n_k^i$ total enrolled but not all with data. The number without data is $\tilde n_k^i = m_k^i - n_k^i$. At an interim analysis we wish to impute the data for individuals enrolled but without follow-up. We denote these missing number of responses as $\tilde y_k^i$.
+
+In addition to enrolled individuals with missing data, there are the yet to be enrolled individuals making up the maximum sample size. At stage $K$ we have $n_K^i$ individuals with $y_K^i$ responses, and so for this end point we have $\tilde n_k^i = n_K^i - n_k^i$ data points missing. In either case, the posterior predictive will have the same parameters but with a different sample size parameter. Therefore in what follows we do not distinguish between the two, however, it is standard to use $\tilde n_k^i = m_k^i - n_k^i$ in deciding success and $\tilde n_k^i = n_K^i - n_k^i$ in deciding futility.
+
+We specify the following model for $i\in\{a,w\}$ and $k\in\{1,...,K\}$,
+$$
+\begin{aligned}
+\pi_0^i(\theta^i) &= \text{Beta}(\theta^i|a^i,b^i) \\
+f_k^i(y_k^i|\theta^i) &= \text{Binomial}(n_k^i, y_k^i) \\
+\pi_k^a(\theta^i|y_k^i) &= \text{Beta}(\theta^i|a^i + y_k^i,b^i + n_k^i - y_k^i) \\
+P_k &= \mathbb P_{\Theta^a,\Theta^w|Y_k^a,Y_k^w}(\theta^w<\theta^a) \\
+&= \int_0^1 \pi_k^a(\theta^a|y_k^a) \left[\int_0^{\theta^a} \pi_k^w(\theta^w|y_k^w)d\theta^w\right] d\theta^a\\
+\tilde f_k^i(\tilde y_k^i|y_k^i) &= \text{Beta-Binomial}(\tilde y_k^i|\tilde n_k^i, a^i+y_k^i, b^i+n_k^i-y_k^i)\\
+\text{PPoS}_k &= \mathbb E_{\tilde Y_k^a, \tilde Y_k^w|Y_k^a,Y_k^w}\left[\mathbb I\left\{\mathbb P_{\Theta^a,\Theta^w|Y_k^a+\tilde Y_k^a,Y_k^w+\tilde Y_k^w}(\theta^w<\theta^a)>k\right\}\right] \\
+&= \sum_{i=0}^{\tilde n_k^a} \sum_{j=0}^{n_k^w} \mathbb I\left\{\int_0^1 \tilde \pi_k^a(\theta^a|y_k^a + i) \left[\int_0^{\theta^a} \tilde \pi_k^w(\theta^w|y_k^w + j)d\theta^w\right] d\theta^a>q\right\} \tilde f_k^w(j|y_k^w)\tilde f_k^a(i|y_k^a)
+\end{aligned}
+$$
+
+The quantity $P_k$ cannot be calculated analytically but can be evaluated numerically or estimated using Monte Carlo methods. Although $\text{PPoS}_k$ can be computed analytically (assuming we have calculated the relevant $\tilde P_k$) it may still be more efficient to estimate using Monte Carlo methods for large sample sizes.
+
+Other options for speeding things up is to pre-determine all possible $\tilde P_k$ values for the possible values of $i,j$, or to determine which $i,j$ have probability greater than some minimum threshold (e.g. $10^{-8}$) and only determine $\tilde P_k$ for that subset of possibilities.
+
+
+## Logistic Regression
+
+Advantage is that we can incorporate additional covariates. However it complicates the simulations. Posterior probabilities are no longer analytically tractable, but instead must be approximated by Monte Carlo measures, or by approximating densities.
+
+We now specify
+$$
+\begin{aligned}
+\theta_k^a &= \text{logit}^{-1}(\beta_0) \\
+\theta_k^w &= \text{logit}^{-1}(\beta_0 + \beta_1) \\
+f_k(y_k^a|\theta_k^a) &= \text{Binomial}(y_k^a|n_k^a, \theta_k^a) \\
+f_k(y_k^w|\theta_k^w) &= \text{Binomial}(y_k^w|n_k^w, \theta_k^w) \\
+\pi_k(\theta_k^a|y_k^a) &\approx N^{-1}\sum_{i=1}^N \delta_{\theta_k^{a,i}}(d\theta_k^a),\quad\{\theta_k^{a,i}\}_{i=1}^N\sim\pi_k(\theta_k^a|y_k^a) \\
+\pi_k(\theta_k^a|y_k^a) &\approx \sum_{i=1}^N \delta_{\theta_k^{a,i}}(d\theta_k^a)
+\end{aligned}
+$$
+
+\clearpage
+
+# Simulations
+
+
+```{r}
+source("r/binary_two_arm_functions.R")
+n_foll <- seq(500, 3000, 500)/2
+n_enro <- pmin(3000/2, n_foll + 1500/2)
+n_miss <- n_enro - n_foll
+sce <- sim_scenario(500, p1tru = 0.11, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+
+system.time(sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.95, 
+                                        post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final"))
+system.time(sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.95, 
+                                            m1int = n_miss, m2int = n_miss, 
+                                            post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim"))
+res <- decide_trial(sce_ppos, fut_k = seq(0.01, 0.1, length.out = 5))
+
+# This makes sense, from n = 750 onwards the interim and final have
+# the same prospective sample size, for n = 250, 500 the final analysis
+# has larger prospective sample size, so should have higher probability of success
+ggplot(sce_ppos, aes(ppos_final, ppos_interim)) + 
+  facet_wrap( ~ n1) + 
+  geom_point() + 
+  geom_abline()
+
+ggplot(sce_ppos, aes(ptail, ppos_interim)) + 
+  facet_wrap( ~ n1) + 
+  geom_point() + 
+  geom_abline()
+
+ggplot(sce_ppos, aes(ptail, ppos_final)) + 
+  facet_wrap( ~ n1) + 
+  geom_point() + 
+  geom_abline()
+```

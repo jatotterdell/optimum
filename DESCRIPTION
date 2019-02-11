@@ -1,6 +1,6 @@
 Package: optimum
 Type: Package
-Title: What the Package Does in One 'Title Case' Line
+Title: Package containing functions and scripts used for optimum study simulations
 Version: 1.0
 Date: 2019-02-10
 Author: James Totterdell

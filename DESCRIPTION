@@ -1,0 +1,22 @@
+Package: optimum
+Type: Package
+Title: What the Package Does in One 'Title Case' Line
+Version: 1.0
+Date: 2019-02-10
+Author: James Totterdell
+Maintainer: James Totterdell <james.totterdell@telethonkids.org.au>
+Description: Functions used for optimum simulations and analysis.
+License: GPL (>= 2)
+Imports: 
+  Rcpp (>= 1.0.0), 
+  RcppArmadillo,
+  data.table,
+  bookdown,
+  parallel,
+  pracma
+LinkingTo: Rcpp, RcppArmadillo
+Suggests: 
+    knitr,
+    rmarkdown,
+    ggridges
+VignetteBuilder: knitr

@@ -1,0 +1,8 @@
+useDynLib(optimum, .registration=TRUE)
+exportPattern("^[[:alpha:]]+")
+importFrom(Rcpp, evalCpp)
+import("data.table")
+import("parallel")
+importFrom("stats", "dbeta", "pbeta", "pnorm", "rbeta", "rbinom")
+importFrom("utils", "tail")
+importFrom("pracma", "quadgk")

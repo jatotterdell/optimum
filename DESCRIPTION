@@ -3,7 +3,7 @@ Type: Package
 Title: Package containing functions and scripts used for optimum study simulations
 Version: 1.0
 Date: 2019-02-10
-Author@R: person("James", "Totterdell", , "james.totterdell@telethonkids.org.au", c("aut", "cre"))
+Authors@R: person("James", "Totterdell", , "james.totterdell@telethonkids.org.au", c("aut", "cre"))
 Description: Functions used for optimum simulations and analysis.
 License: GPL (>= 2)
 Encoding: UTF-8

@@ -27,3 +27,6 @@ vignettes/*.pdf
 # Installed document files
 /inst/doc/
 .Rproj.user
+
+# Working files for experimentation
+R/*_test.R

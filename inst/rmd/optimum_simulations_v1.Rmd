@@ -12,14 +12,13 @@ delete_merged_file: true
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-	eval = FALSE,
+	echo = FALSE,
 	fig.align = "center",
 	fig.height = 3,
-	fig.pos = "H",
+	fig.pos = "h",
 	fig.width = 6,
 	message = FALSE,
-	warning = FALSE,
-	include = FALSE
+	warning = FALSE
 )
 options(stringsAsFactors = FALSE)
 
@@ -29,22 +28,16 @@ knitr::opts_knit$set(root.dir = '../..')
 
 ```{r pkgs}
 library(ggplot2)
+library(gridExtra)
 library(data.table)
 library(tidyverse)
 library(tidybayes)
+library(kableExtra)
 
 theme_set(theme_bw())
 ```
 
 
-```{r stan}
-library(rstan)
-Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
-rstan_options(auto_write = TRUE)
-options(mc.cores = parallel::detectCores())
-stan_logreg <- stan_model("stan/logreg.stan")
-stan_logreg_np <- stan_model("stan/logreg_nopred.stan")
-```
 
 # Background and Rationale
 
@@ -52,66 +45,80 @@ The aim is to o assess the allergy-preventive benefit and the safety of using wP
 
 # Primary Outcome
 
-The primary outcome is challenge-proven IgE-mediated food allergy by age 18-months.
-
-The end-point is challenge-proven IgE-mediated food allergy at 18-months.
+The primary outcome is challenge-proven IgE-mediated food allergy by age 18-months. The end-point is challenge-proven IgE-mediated food allergy at 18-months.
 
 \clearpage
 
 # Sample size and accrual
 
-The end-point is food allergy at 18-months. For simplicity, assume babies are enrolled and randomised at 0 months of age. Then no follow-up data is available until 18-months after the first infant is enrolled.
+The end-point is food allergy at 18-months. For simplicity, assume babies are enrolled and randomised at 0 months of age. So, no follow-up data is available until 18-months after the first infant is enrolled.
 
-Suppose accrual is 20 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 1,560 infants (78 weeks $\times$ 20 per week). The minimum acrrual rate needed to enroll 3,000 infants over 5 years is about 11.5 per week. At this rate, by the time we have follow-up on the first individual we would have enrolled 780 infants.
+Suppose accrual is 20 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 1,560 infants (78 weeks $\times$ 20 per week). Assuming the first analysis was at $n=500$, we would have about 2,000 individuals enrolled, so 1,500 with missing information at the time of the first interim. Full follow-up would occur at about week 228 (Figure \@ref(fig:unnamed-chunk-1)).
 
-```{r}
+Suppose accrual is 10 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 780 infants. Assuming the first analysis was at $n=500$, we would have about 1,300 enrolled, so 800 with missing information at the first interim. Full follow-up would occur at about week 378.
+
+The minimum acrrual rate needed to enroll 3,000 infants over 5 years is about 11.5 per week.
+
+
+```{r, fig.cap="Assumed accrual rate and associated delay of information.", fig.height = 5}
 H <- function(x) as.numeric(x>0)
 
 weeks_followup <- 78
 per_week_accrual <- 20
-week <- seq(0, (52*6), 1)
+week <- seq(0, (52*8), 1)
 
 d <- data.frame(week = week,
                 enrolled = pmin(3000, week*per_week_accrual),
                 followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
 d <- d[which(d$followup <= 3000), ]
-d$interim <- as.numeric(d$followup %in% seq(500, 3000, 100))
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
 d$anyfollowup <- as.numeric(d$followup > 0)
+# d[d$followup == d$enrolled, ]
 
-ggplot(d,
+p1 <- ggplot(d,
        aes(x = week)) +
   geom_line(aes(y = enrolled, colour = "Enrolled")) +
-  geom_line(aes(y = followup, colour = "Responded"), linetype = 2) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
   geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
   geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
                aes(x = week, xend = week, y = 0, yend = enrolled)) +
   geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
                aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
   scale_y_continuous(breaks = seq(0, 2500, 500)) +
-  labs(x = "Week", y = "Number enrolled/follow-up")
+  xlim(0, 400) +
+  scale_color_discrete("") +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.8, 0.6), panel.grid = element_blank(),
+        legend.background = element_blank())
 
 weeks_followup <- 78
-per_week_accrual <- 12
-week <- seq(0, (52*6), 1)
+per_week_accrual <- 10
+week <- seq(0, (52*8), 1)
 
 d <- data.frame(week = week,
                 enrolled = pmin(3000, week*per_week_accrual),
                 followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
 d <- d[which(d$followup <= 3000), ]
-d$interim <- as.numeric(d$followup %in% seq(500, 3000, 100))
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
 d$anyfollowup <- as.numeric(d$followup > 0)
 
-ggplot(d,
+
+p2 <- ggplot(d,
        aes(x = week)) +
   geom_line(aes(y = enrolled, colour = "Enrolled")) +
-  geom_line(aes(y = followup, colour = "Responded"), linetype = 2) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
   geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
   geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
                aes(x = week, xend = week, y = 0, yend = enrolled)) +
   geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
                aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
   scale_y_continuous(breaks = seq(0, 2500, 500)) +
-  labs(x = "Week", y = "Number enrolled/follow-up")
+  xlim(0, 400) +
+  scale_color_discrete("", guide = F) +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.2, 0.8), panel.grid = element_blank())
+
+grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "first"))
 ```
 
 \clearpage
@@ -186,12 +193,13 @@ Parameters we need to configure are:
   * $\underline c_K, \overline c_K$ - the bounds used at the final analysis for decisions
   * $q_k$ - the bounds used for determining posterior probability of success in $\text{PPos}_k$ (should this just be $\overline c_K$?)
 
-```{r}
+```{r, eval=F}
 source("r/binary_two_arm_functions.R")
 n_foll <- seq(500, 3000, 500)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
-sce <- sim_scenario(100, p1tru = 0.11, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+
+sce <- sim_scenario(100, p1tru = 0.10, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
 
 system.time(sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.9, 
                                         post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final"))
@@ -199,6 +207,16 @@ system.time(sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.9,
                                             m1int = n_miss, m2int = n_miss, 
                                             post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim"))
 res <- decide_trial(sce_ppos)
+res[, .N, keyby = res][, .(res, N, P = N / sum(N))]
+
+out <- sce_ppos[res, on = .(sim_id, stage)][1, ]
+y1pred <- rbinom(10000, out$ppos_final_m1, out$p1tru)
+y2pred <- rbinom(10000, out$ppos_final_m2, out$p2tru)
+y1pred <- rbetabinom(10000, out$ppos_final_m1, out$a1, out$b1)
+y2pred <- rbetabinom(10000, out$ppos_final_m2, out$a2, out$b2)
+P <- beta_ineq_approx(out$a1 + y1pred, out$b1 + out$ppos_final_m1 - y1pred,
+                 out$a2 + y2pred, out$b2 + out$ppos_final_m2 - y2pred)
+mean(P > 0.9)
 
 # This makes sense, from n = 750 onwards the interim and final have
 # the same prospective sample size, for n = 250, 500 the final analysis
@@ -217,4 +235,50 @@ ggplot(sce_ppos, aes(ptail, ppos_final)) +
   facet_wrap( ~ n1) + 
   geom_point() + 
   geom_abline()
+```
+
+
+## 20 per week
+
+```{r, cache = TRUE}
+n_foll <- seq(500, 3000, 500)/2
+n_enro <- pmin(3000/2, n_foll + 1500/2)
+n_miss <- n_enro - n_foll
+sims <- 10
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+pt <- proc.time()
+out <- lapply(1:nrow(scenarios),
+       function(i) {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(
+           sce, k_ppos = 0.9, post_method = "approx", 
+           pp_sim = 1e4, ppos_name = "ppos_final")
+         # Get PPoS at interim imputing missing follow-up
+         sce_ppos <- calc_scenario_ppos(
+           sce_ppos, k_ppos = 0.9, m1int = n_miss, m2int = n_miss, 
+           post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
+        
+         res <- decide_trial(sce_ppos)
+         res <- sce_ppos[res, on = .(sim_id, stage)]
+         return(res)
+       })
+proc.time() - pt
+out <- rbindlist(out, idcol = "scenario")
+
+sce <- sim_scenario(100, p1tru = 0.1, p2tru = 0.07, n1int = n_foll, n2int = n_foll)
+# Get PPoS at final sample size
+sce_ppos <- calc_scenario_ppos(
+  sce, k_ppos = 0.9, post_method = "approx", 
+  pp_sim = 1e4, ppos_name = "ppos_final")
+# Get PPoS at interim imputing missing follow-up
+sce_ppos <- calc_scenario_ppos(
+  sce_ppos, k_ppos = 0.9, m1int = n_miss, m2int = n_miss, 
+  post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
+
+res <- decide_trial(sce_ppos)
+res <- sce_ppos[res, on = .(sim_id, stage)]
 ```

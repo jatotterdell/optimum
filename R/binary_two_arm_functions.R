@@ -70,10 +70,10 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 #' using numerical integration
 #' 
-#' @param a
-#' @param b
-#' @param c
-#' @param d
+#' @param a Parameter one of beta density for X
+#' @param b Parameter two of beta density for X
+#' @param c Parameter one of beta density for Y
+#' @param d Parameter two of beta density for Y
 #' @param delta The difference we wish to assess (i.e. X - Y > delta)
 #' @param ... other arguments passed to integrate/quadgk function
 #' 
@@ -92,10 +92,10 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 #' using Normal approximation.
 #' 
-#' @param a
-#' @param b
-#' @param c
-#' @param d
+#' @param a Parameter one of beta density for X
+#' @param b Parameter two of beta density for X
+#' @param c Parameter one of beta density for Y
+#' @param d Parameter two of beta density for Y
 #' @param delta The difference we wish to assess (i.e. X - Y > delta)
 #' 
 #' @return The value of the integral
@@ -115,10 +115,10 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 #' using Monte Carlo method.
 #' 
-#' @param a
-#' @param b
-#' @param c
-#' @param d
+#' @param a Parameter one of beta density for X
+#' @param b Parameter two of beta density for X
+#' @param c Parameter one of beta density for Y
+#' @param d Parameter two of beta density for Y
 #' @param delta The difference we wish to assess (i.e. X - Y > delta)
 #' @param sims The number of Monte Carlo variates to generate for estimation
 #' 
@@ -161,7 +161,7 @@ beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
 #'
 #'   Otherwise => continue to k + 1
 #'   
-#' @param sim_id
+#' @param sim_id The simulation ID reference number
 #' @param p1tru True value for response rate arm 1
 #' @param p2tru True value for response rate arm 2
 #' @param delta Relative difference of interest (X - Y > delta)
@@ -171,6 +171,9 @@ beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
 #' @param b1 Prior parameter arm 1
 #' @param a2 Prior parameter arm 2
 #' @param b2 Prior parameter arm 2
+#' 
+#' @return A data.table of the simulated trial containing 
+#' one row for each interim analysis.
 #' 
 #' @export
 sim_trial <- function(
@@ -238,6 +241,11 @@ sim_trial <- function(
 #' with early termination for futility/success
 #' for a given scenario.
 #' 
+#' @param sims The number of simulations to undertake for the scenario
+#' @param ... Other arguments to `sim_trial`` function
+#' 
+#' @return A data.table of multiple simulated trials using the same parameters
+#' 
 #' @export
 sim_scenario <- function(sims, ...) {
   res <- lapply(1:sims, function(i, ...) sim_trial(i, ...), ...)
@@ -293,24 +301,42 @@ calc_trial_ppos <- function(
   }
   trial[, (ppos_name) := ppos]
   trial[, (paste0(ppos_name, "_cut")) := k_ppos]
+  trial[, (paste0(ppos_name, "_m1")) := m1int]
+  trial[, (paste0(ppos_name, "_m2")) := m2int]
   invisible(trial)
 }
 
-# Don't really need this function
-
+#' Calculate the Predictive Probability of Success for
+#' a given trial scenario. Repeatedly calls calc_trial_ppos.
+#' 
+#' @param scenario A data.table returned from `sim_scenario`.
+#' @param ... Other arguements to `calc_trial_ppos`.
+#' 
+#' @return A data.table of scenario with the PPoS results incorporated.
+#' 
+#' @export
 calc_scenario_ppos <- function(scenario, ...) {
   scenario_split <- split(scenario, scenario$sim_id)
   cl <- makeCluster(detectCores())
-  clusterExport(cl, c("beta_ineq_approx", "rbetabinom"))
+  clusterExport(cl, c("beta_ineq", "beta_ineq_approx", "rbetabinom"))
   res <- parLapply(cl, scenario_split, calc_trial_ppos, ...)
   stopCluster(cl)
   return(rbindlist(res))
 }
 
-# Functions to apply decision logic two specific two-arm trial
-# We want to be able to specify the column used to determine futility
-# and the column used to determine success
-# and the cut-offs for each of these.
+#' Apply a decision rule to a trial from `sim_trial`
+#' 
+#' @param trial The data.table fro the trial in question
+#' @param fut_var The name of the variable used for determining futility at interim analyses.
+#' @param suc_var The name of the variable used for determining success at interim analyses.
+#' @param fut_k The probability cut-off for futility.
+#' @param suc_k The probability cut-off for success
+#' @param inf_k The probability cut-off at final analysis for declaring theta_1 < theta_2
+#' @param sup_k The probability cut-off at final analysis for declaring theta_1 > theta_2
+#' 
+#' @return A data.table of the stage at which a decision was made.
+#' 
+#' @export
 decide_trial <- function(
   trial,
   fut_var = "ppos_final",
@@ -318,11 +344,7 @@ decide_trial <- function(
   fut_k = 0.1,
   suc_k = 0.9,
   inf_k = 0.05,
-  sup_k = 0.95,
-  interim_method = "post") {
-  
-  if(!interim_method %in% c("post", "post_pred"))
-    stop("method must be in c('post', 'post_pred').")
+  sup_k = 0.95) {
   
   trial[,
     {
@@ -336,11 +358,7 @@ decide_trial <- function(
              fut_k = paste(fut_k, collapse = ","),
              suc_k = paste(suc_k, collapse = ","),
              inf_k = inf_k,
-             sup_k = sup_k,
-             a1 = a1[int],
-             b1 = b1[int],
-             a2 = a2[int],
-             b2 = b2[int])
+             sup_k = sup_k)
       } else {
         inf <- tail(ptail, 1) < tail(inf_k, 1)
         sup <- tail(ptail, 1) > tail(sup_k, 1)
@@ -349,11 +367,7 @@ decide_trial <- function(
              fut_k = paste(fut_k, collapse = ","),
              suc_k = paste(suc_k, collapse = ","),
              inf_k = inf_k,
-             sup_k = sup_k,
-             a1 = a1[.N],
-             b1 = b1[.N],
-             a2 = a2[.N],
-             b2 = b2[.N])
+             sup_k = sup_k)
       }
     }, by = sim_id]
 }

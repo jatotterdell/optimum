@@ -268,17 +268,4 @@ out <- lapply(1:nrow(scenarios),
        })
 proc.time() - pt
 out <- rbindlist(out, idcol = "scenario")
-
-sce <- sim_scenario(100, p1tru = 0.1, p2tru = 0.07, n1int = n_foll, n2int = n_foll)
-# Get PPoS at final sample size
-sce_ppos <- calc_scenario_ppos(
-  sce, k_ppos = 0.9, post_method = "approx", 
-  pp_sim = 1e4, ppos_name = "ppos_final")
-# Get PPoS at interim imputing missing follow-up
-sce_ppos <- calc_scenario_ppos(
-  sce_ppos, k_ppos = 0.9, m1int = n_miss, m2int = n_miss, 
-  post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
-
-res <- decide_trial(sce_ppos)
-res <- sce_ppos[res, on = .(sim_id, stage)]
 ```

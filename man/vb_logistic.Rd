@@ -22,7 +22,7 @@ vb_logistic(X, y, mu0, Sigma0, tol = 1e-08, maxiter = 1000L,
 
 \item{maxiter_jj}{The maximum number of Jaakkola-Jordan iterations to initialise estimation}
 
-\item{string_alg}{The algorithm used for final estimation of variational parameters. 
+\item{alg}{The algorithm used for final estimation of variational parameters. 
 Must be one of "jj", "sj", "kmw".}
 }
 \description{

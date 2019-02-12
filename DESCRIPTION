@@ -9,29 +9,23 @@ License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 ByteCompile: true
-Depends: R (>= 3.4.0), methods
+Depends: R (>= 3.4.0), data.table
 Imports: 
+    stats,
     bookdown,
-    data.table,
     parallel,
     pracma,
-    Rcpp (>= 1.0.0),
-    RcppArmadillo,
-    rstan (>= 2.18.1),
-    rstantools (>= 1.5.1.9000)
+    Rcpp,
+    RcppArmadillo
 LinkingTo: 
-    BH (>= 1.66.0-1),
-    Rcpp (>= 0.12.0),
-    RcppArmadillo,
-    RcppEigen (>= 0.3.3.3.0),
-    rstan (>= 2.18.1),
-    StanHeaders (>= 2.18.0)
+    Rcpp,
+    RcppArmadillo
 Suggests: 
   knitr,
   rmarkdown,
+  ggplot2,
   ggridges
 SystemRequirements: GNU make
-NeedsCompilation: yes
 VignetteBuilder: knitr
 RoxygenNote: 6.1.1
 Biarch: true

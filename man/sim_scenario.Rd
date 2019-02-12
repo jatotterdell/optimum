@@ -8,6 +8,14 @@ for a given scenario.}
 \usage{
 sim_scenario(sims, ...)
 }
+\arguments{
+\item{sims}{The number of simulations to undertake for the scenario}
+
+\item{...}{Other arguments to `sim_trial`` function}
+}
+\value{
+A data.table of multiple simulated trials using the same parameters
+}
 \description{
 Simulate a set of Bayesian two-arm trials
 with early termination for futility/success

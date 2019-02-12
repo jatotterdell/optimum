@@ -162,8 +162,10 @@ double knowles_minka_wand(
 //' @param tol The tolerance level to assess convergence
 //' @param maxiter The maximum number of iterations
 //' @param maxiter_jj The maximum number of Jaakkola-Jordan iterations to initialise estimation
-//' @param string_alg The algorithm used for final estimation of variational parameters. 
+//' @param alg The algorithm used for final estimation of variational parameters. 
 //' Must be one of "jj", "sj", "kmw".
+//' 
+//' @export
 // [[Rcpp::export]]
 List vb_logistic(
   const arma::mat& X, const arma::vec& y,

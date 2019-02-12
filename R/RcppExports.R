@@ -63,8 +63,10 @@ knowles_minka_wand <- function(X, y, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s) {
 #' @param tol The tolerance level to assess convergence
 #' @param maxiter The maximum number of iterations
 #' @param maxiter_jj The maximum number of Jaakkola-Jordan iterations to initialise estimation
-#' @param string_alg The algorithm used for final estimation of variational parameters. 
+#' @param alg The algorithm used for final estimation of variational parameters. 
 #' Must be one of "jj", "sj", "kmw".
+#' 
+#' @export
 vb_logistic <- function(X, y, mu0, Sigma0, tol = 1e-8, maxiter = 1000L, maxiter_jj = 25L, alg = "jj") {
     .Call(`_optimum_vb_logistic`, X, y, mu0, Sigma0, tol, maxiter, maxiter_jj, alg)
 }

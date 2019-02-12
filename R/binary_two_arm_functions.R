@@ -1,4 +1,17 @@
+# Define global variables to avoid
+# notes from R CMD check
+P <- NULL
+N <- NULL
+ptail <- NULL
+sim_id <- NULL
+a1 <- b1 <- a2 <- b2 <- NULL
+parm <- stage <- variable <- value <- grp <- NULL
+
+
 #' Calculate density of beta-binomial distribution
+#' 
+#' @useDynLib optimum, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
 #' 
 #' @param x The value at which to evaluate the density
 #' @param n The sample size
@@ -7,7 +20,8 @@
 #' 
 #' @return Value of beta-binomial(n,a,b) evaluated at x
 #' 
-#' @examples dbetabinom(5, 10, 2, 3)
+#' @examples 
+#' dbetabinom(5, 10, 2, 3)
 #' 
 #' @export
 dbetabinom <- function(x, n, a = 1, b = 1){
@@ -19,19 +33,24 @@ dbetabinom <- function(x, n, a = 1, b = 1){
 
 #' Draw random variates from beta-binomial distribution
 #' 
+#' @import stats
+#' 
 #' @param n The number of random values to sample
 #' @param m The sample size
 #' @param a First parameter
 #' @param b Second parameter
 #' 
-#' @example rbetabinom(2, 10, 2, 3)
+#' @examples
+#' rbetabinom(2, 10, 2, 3)
 #' 
 #' @export
 rbetabinom <- function(n, m, a = 1, b = 1) {
-  rbinom(n, m, rbeta(n, a, b))
+  stats::rbinom(n, m, stats::rbeta(n, a, b))
 }
 
 #' Calculate the predicted probability of success
+#' 
+#' @import data.table
 #' 
 #' @param a First parameter of first beta random variable
 #' @param b Second parameter of first beta random variable
@@ -41,31 +60,29 @@ rbetabinom <- function(n, m, a = 1, b = 1) {
 #' @param m2 Sample size to predict for second beta random variable
 #' @param k_ppos The posterior probability cut-point to be assessed
 #' 
-#' @example calc_ppos(5, 5, 3, 7, 10, 10, 0.9)
-#' 
 #' @return The predicted probability of success
 #' 
 #' @export
 calc_ppos <- function(a, b, c, d, m1, m2, k_ppos) {
   y1pred <- rbetabinom(10000, m1, a, b)
   y2pred <- rbetabinom(10000, m2, c, d)
-  ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, .N, keyby = .(y1pred, y2pred)]
-  ypred[, P := Vectorize(beta_ineq)(a + y1pred, 
+  ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, data.table::.N, keyby = list(y1pred, y2pred)]
+  ypred[, `:=`(P = Vectorize(beta_ineq)(a + y1pred, 
                                     b + m1 - y1pred, 
                                     c + y2pred,
-                                    d + m2 - y2pred)]
+                                    d + m2 - y2pred))]
   ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
 }
 
 # Estimate
 # P(X > Y + delta)
-# where X ~ Beta(a, b), Y ~ Beta(c, d)
-beta_ineq <- function(a, b, c, d, delta = 0, ...) {
-  integrand <- function(x) { dbeta(x, a, b)*pbeta(x - delta, c, d) }
-  tryCatch(
-    integrate(integrand, delta, 1, ...)$value,
-    error = function(err) NA)
-}
+# # where X ~ Beta(a, b), Y ~ Beta(c, d)
+# beta_ineq <- function(a, b, c, d, delta = 0, ...) {
+#   integrand <- function(x) { dbeta(x, a, b)*pbeta(x - delta, c, d) }
+#   tryCatch(
+#     integrate(integrand, delta, 1, ...)$value,
+#     error = function(err) NA)
+# }
 
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 #' using numerical integration
@@ -79,13 +96,14 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 #' 
 #' @return The value of the integral
 #' 
-#' @example beta_ineq(5, 5, 3, 7)
+#' @examples 
+#' beta_ineq(5, 5, 3, 7)
 #' 
 #' @export
 beta_ineq <- function(a, b, c, d, delta = 0, ...) {
-  integrand <- function(x) { dbeta(x, a, b)*pbeta(x - delta, c, d) }
+  integrand <- function(x) { stats::dbeta(x, a, b)*stats::pbeta(x - delta, c, d) }
   tryCatch(
-    quadgk(integrand, delta, 1, ...),
+    pracma::quadgk(integrand, delta, 1, ...),
     error = function(err) NA)
 }
 
@@ -100,7 +118,8 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 #' 
 #' @return The value of the integral
 #' 
-#' @example beta_ineq_approx(5, 5, 3, 7)
+#' @examples 
+#' beta_ineq_approx(5, 5, 3, 7)
 #' 
 #' @export
 beta_ineq_approx <- function(a, b, c, d, delta = 0) {
@@ -109,7 +128,7 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
   m2 <- c / (c + d)
   v2 <- c*d / ( (c + d)^2 * (c + d + 1))
   z <- (m1 - m2 - delta) / sqrt(v1 + v2)
-  return(pnorm(z))
+  return(stats::pnorm(z))
 }
 
 #' Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
@@ -124,12 +143,13 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
 #' 
 #' @return The value of the integral
 #' 
-#' @example beta_ineq_sim(5, 5, 3, 7)
+#' @examples 
+#' beta_ineq_sim(5, 5, 3, 7)
 #' 
 #' @export
 beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
-  X <- rbeta(sims, a, b)
-  Y <- rbeta(sims, c, d)
+  X <- stats::rbeta(sims, a, b)
+  Y <- stats::rbeta(sims, c, d)
   mean(X > Y + delta)
 }
 
@@ -171,9 +191,12 @@ beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
 #' @param b1 Prior parameter arm 1
 #' @param a2 Prior parameter arm 2
 #' @param b2 Prior parameter arm 2
+#' @param post_method What method to use for estimating the Beta inequality. One of `exact`, `approx` or `sim`.
 #' 
 #' @return A data.table of the simulated trial containing 
 #' one row for each interim analysis.
+#' 
+#' @import data.table
 #' 
 #' @export
 sim_trial <- function(
@@ -190,7 +213,7 @@ sim_trial <- function(
   post_method = "exact"
 ) {
   
-  if(! post_method %in% c("exact", "approx", "sim")) 
+  if(!post_method %in% c("exact", "approx", "sim")) 
     stop("post_method must be either 'exact', 'approx', or 'sim'.")
   if(length(n1int) != length(n2int)) 
     stop("n1int and n2int must be of same dimension.")
@@ -234,7 +257,7 @@ sim_trial <- function(
   sim_trial <- cbind(sim_id = sim_id, stage = 1:n_analyses,
                           p1tru = p1tru, p2tru = p2tru, delta = delta,
                           as.data.frame(do.call(rbind, intr)))
-  return(as.data.table(sim_trial))
+  return(data.table::as.data.table(sim_trial))
 }
 
 #' Simulate a set of Bayesian two-arm trials
@@ -285,7 +308,7 @@ calc_trial_ppos <- function(
         
         # No point computing posterior for duplicate values
         # just do once and multiply by the frequency
-        ypred <- data.table(y1pred, y2pred)[, .N, by = .(y1pred, y2pred)]
+        ypred <- data.table(y1pred, y2pred)[, .N, by = list(y1pred, y2pred)]
         ypred[, P := Vectorize(calc_post)(trial$a1[i] + y1pred, 
                                           trial$b1[i] + m1int[i] - y1pred, 
                                           trial$a2[i] + y2pred,
@@ -310,21 +333,29 @@ calc_trial_ppos <- function(
 #' a given trial scenario. Repeatedly calls calc_trial_ppos.
 #' 
 #' @param scenario A data.table returned from `sim_scenario`.
+#' @param useParallel Use parallel processing for calculating PPoS.
 #' @param ... Other arguements to `calc_trial_ppos`.
 #' 
 #' @return A data.table of scenario with the PPoS results incorporated.
 #' 
 #' @export
-calc_scenario_ppos <- function(scenario, ...) {
+calc_scenario_ppos <- function(scenario, useParallel = FALSE, ...) {
   scenario_split <- split(scenario, scenario$sim_id)
-  cl <- makeCluster(detectCores())
-  clusterExport(cl, c("beta_ineq", "beta_ineq_approx", "rbetabinom"))
-  res <- parLapply(cl, scenario_split, calc_trial_ppos, ...)
-  stopCluster(cl)
-  return(rbindlist(res))
+  if(useParallel) {
+    cl <- parallel::makeCluster(parallel::detectCores())
+    parallel::clusterExport(cl, c("beta_ineq", "beta_ineq_approx", "rbetabinom"))
+    res <- parallel::parLapply(cl, scenario_split, calc_trial_ppos, ...)
+    parallel::stopCluster(cl)
+     
+  } else {
+    res <- lapply(scenario_split, calc_trial_ppos, ...)
+  }
+  return(data.table::rbindlist(res))
 }
 
 #' Apply a decision rule to a trial from `sim_trial`
+#' 
+#' @import utils
 #' 
 #' @param trial The data.table fro the trial in question
 #' @param fut_var The name of the variable used for determining futility at interim analyses.
@@ -372,25 +403,30 @@ decide_trial <- function(
     }, by = sim_id]
 }
 
-
+#' Plot a trial
+#' 
+#' @param trial A trial output from sim_trial
+#' @param par_seq The sequence of parameter values at which to evaluate the densities
+#' 
+#' @export
 plot_trial <- function(trial, par_seq) {
-  if(requireNamespace(ggridges, quietly = TRUE)) {
-    d1 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, a1, b1)), by = .(stage, s1 = a1, s2 = b1)], 
-               id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "1", par = par_seq)]
-    d2 <- melt(trial[, lapply(par_seq, function(x) dbeta(x, a2, b2)), by = .(stage, s1 = a2, s2 = b2)], 
-               id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "2", par = par_seq)]
-    d <- rbindlist(list(d1, d2))
-    ggplot(d,
-           aes(x = par, y = stage, height = value)) +
-      geom_density_ridges(aes(fill = paste(stage, grp)), stat = "identity",
+  if(requireNamespace('ggridges', quietly = TRUE)) {
+    d1 <- data.table::melt(trial[, lapply(par_seq, function(x) dbeta(x, a1, b1)), by = list(stage, s1 = a1, s2 = b1)], 
+               id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "1", parm = par_seq)]
+    d2 <- data.table::melt(trial[, lapply(par_seq, function(x) dbeta(x, a2, b2)), by = list(stage, s1 = a2, s2 = b2)], 
+               id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "2", parm = par_seq)]
+    d <- data.table::rbindlist(list(d1, d2))
+    ggplot2::ggplot(d,
+           ggplot2::aes(x = parm, y = stage, height = value)) +
+      ggridges::geom_density_ridges(ggplot2::aes(fill = paste(stage, grp)), stat = "identity",
                           alpha = 0.8, colour = "grey50") +
-      scale_fill_cyclical(
+      ggridges::scale_fill_cyclical(
         breaks = c("1", "2"),
         labels = c(`1` = "1", `2` = "2"),
         values = c("#ff8080", "#8080ff"),
         name = "Option", guide = "legend"
       ) +
-      labs(x = bquote(theta), y = "stage")  
+      ggplot2::labs(x = bquote(theta), y = "stage")  
   }
 }
 

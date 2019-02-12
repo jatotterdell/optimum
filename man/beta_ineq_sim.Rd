@@ -8,6 +8,14 @@ using Monte Carlo method.}
 beta_ineq_sim(a, b, c, d, delta = 0, sims = 10000)
 }
 \arguments{
+\item{a}{Parameter one of beta density for X}
+
+\item{b}{Parameter two of beta density for X}
+
+\item{c}{Parameter one of beta density for Y}
+
+\item{d}{Parameter two of beta density for Y}
+
 \item{delta}{The difference we wish to assess (i.e. X - Y > delta)}
 
 \item{sims}{The number of Monte Carlo variates to generate for estimation}
@@ -18,4 +26,8 @@ The value of the integral
 \description{
 Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 using Monte Carlo method.
+}
+\examples{
+beta_ineq_sim(5, 5, 3, 7)
+
 }

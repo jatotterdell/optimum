@@ -8,6 +8,14 @@ using Normal approximation.}
 beta_ineq_approx(a, b, c, d, delta = 0)
 }
 \arguments{
+\item{a}{Parameter one of beta density for X}
+
+\item{b}{Parameter two of beta density for X}
+
+\item{c}{Parameter one of beta density for Y}
+
+\item{d}{Parameter two of beta density for Y}
+
 \item{delta}{The difference we wish to assess (i.e. X - Y > delta)}
 }
 \value{
@@ -16,4 +24,8 @@ The value of the integral
 \description{
 Calculate Pr(X > Y + delta) where X and Y are independent Beta random variables
 using Normal approximation.
+}
+\examples{
+beta_ineq_approx(5, 5, 3, 7)
+
 }

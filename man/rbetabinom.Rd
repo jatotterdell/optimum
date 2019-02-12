@@ -18,3 +18,7 @@ rbetabinom(n, m, a = 1, b = 1)
 \description{
 Draw random variates from beta-binomial distribution
 }
+\examples{
+rbetabinom(2, 10, 2, 3)
+
+}

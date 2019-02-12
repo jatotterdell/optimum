@@ -15,6 +15,8 @@ sim_trial(sim_id = 1, p1tru = 0.1, p2tru = 0.1, delta = 0,
   b1 = 1, a2 = 1, b2 = 1, post_method = "exact")
 }
 \arguments{
+\item{sim_id}{The simulation ID reference number}
+
 \item{p1tru}{True value for response rate arm 1}
 
 \item{p2tru}{True value for response rate arm 2}
@@ -32,6 +34,12 @@ sim_trial(sim_id = 1, p1tru = 0.1, p2tru = 0.1, delta = 0,
 \item{a2}{Prior parameter arm 2}
 
 \item{b2}{Prior parameter arm 2}
+
+\item{post_method}{What method to use for estimating the Beta inequality. One of `exact`, `approx` or `sim`.}
+}
+\value{
+A data.table of the simulated trial containing 
+one row for each interim analysis.
 }
 \description{
 Hypothesis:

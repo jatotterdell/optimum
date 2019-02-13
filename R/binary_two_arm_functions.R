@@ -31,6 +31,19 @@ dbetabinom <- function(x, n, a = 1, b = 1){
   prob
 }
 
+#' Compare Normal approximation to Beta
+#' 
+#' @param a First Beta parameter
+#' @param b Second Beta parameter
+#' @param ... Other arguments to `curve()`
+#' @return A plot of Beta density and Normal approximation
+#' 
+#' @export
+plot_beta_norm <- function(a, b, ...) {
+  curve(dbeta(x, a, b), ...)
+  curve(dnorm(x, a/(a + b), sqrt( a*b / ((a+b)^2*(a+b+1)) )), add = TRUE, col = "red", ...)
+}
+
 #' Draw random variates from beta-binomial distribution
 #' 
 #' @import stats
@@ -318,6 +331,11 @@ calc_trial_ppos <- function(
       
       if (ppos_method == "exact") {
         stop("Exact not implemented.")
+        P <- outer(0:m1int, 0:m2int, function(x, y) 
+          dbetabinom(x, m1int, trial$a1[i], trial$b1[i]) * dbetabinom(y, m2int, trial$a2[i], trial$b2[i]))
+        Post <- outer(0:m1int, 0:m1int, function(x,y) 
+          Vectorize(calc_post)(trial$a1[i] + x, trial$b1[i] + m1int - x,
+                               trial$a2[i] + y, trial$b2[i] + m2int - y))
       }
       
     }

@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 	echo = FALSE,
 	fig.align = "center",
 	fig.height = 3,
-	fig.pos = "h",
+	fig.pos = "ht",
 	fig.width = 6,
 	message = FALSE,
 	warning = FALSE
@@ -33,8 +33,12 @@ library(data.table)
 library(tidyverse)
 library(tidybayes)
 library(kableExtra)
+library(doParallel)
 
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 9))
+
+# source("R/binary_two_arm_functions.R")
+library(optimum)
 ```
 
 
@@ -145,9 +149,9 @@ Given the lengthy delay in information, we will likely utilise posterior predict
 
 ## Independent Beta-Binomial Models
 
-Suppose that at each analysis $k=1,...,K$ we have data on $n_k^i$ individuals with $y_k^i$ responses for $i\in\{a,w\}$. We also assume that we have $m_k^i\geq n_k^i$ total enrolled but not all with data. The number without data is $\tilde n_k^i = m_k^i - n_k^i$. At an interim analysis we wish to impute the data for individuals enrolled but without follow-up. We denote these missing number of responses as $\tilde y_k^i$.
+Suppose that at each analysis $k=1,...,K$ we have data on $n_k^i$ individuals with $y_k^i$ responses for $i\in\{a,w\}$. We also assume that we have $m_k^i\geq n_k^i$ total enrolled but not all with data. The number without data is $\tilde n_k^i = m_k^i - n_k^i$. At an interim analysis we wish to impute the data for individuals enrolled but without follow-up. We denote these missing number of responses by $\tilde y_k^i$.
 
-In addition to enrolled individuals with missing data, there are the yet to be enrolled individuals making up the maximum sample size. At stage $K$ we have $n_K^i$ individuals with $y_K^i$ responses, and so for this end point we have $\tilde n_k^i = n_K^i - n_k^i$ data points missing. In either case, the posterior predictive will have the same parameters but with a different sample size parameter. Therefore in what follows we do not distinguish between the two, however, it is standard to use $\tilde n_k^i = m_k^i - n_k^i$ in deciding success and $\tilde n_k^i = n_K^i - n_k^i$ in deciding futility.
+In addition to enrolled individuals with missing data, there are the yet to be enrolled individuals making up the maximum sample size. At stage $K$ we have $n_K^i$ individuals with $y_K^i$ responses, and so for this end point we have $\tilde n_k^i = n_K^i - n_k^i$ data points missing. In either case, the posterior predictive will have the same parameters but with a different sample size parameter. Therefore in what follows we do not distinguish between the two, however, it is standard to use $\tilde n_k^i = m_k^i - n_k^i$ in deciding expected success and $\tilde n_k^i = n_K^i - n_k^i$ in deciding futility.
 
 We specify the following model for $i\in\{a,w\}$ and $k\in\{1,...,K\}$,
 $$
@@ -158,14 +162,38 @@ f_k^i(y_k^i|\theta^i) &= \text{Binomial}(n_k^i, y_k^i) \\
 P_k &= \mathbb P_{\Theta^a,\Theta^w|Y_k^a,Y_k^w}(\theta^w<\theta^a) \\
 &= \int_0^1 \pi_k^a(\theta^a|y_k^a) \left[\int_0^{\theta^a} \pi_k^w(\theta^w|y_k^w)d\theta^w\right] d\theta^a\\
 \tilde f_k^i(\tilde y_k^i|y_k^i) &= \text{Beta-Binomial}(\tilde y_k^i|\tilde n_k^i, a^i+y_k^i, b^i+n_k^i-y_k^i)\\
-\text{PPoS}_k &= \mathbb E_{\tilde Y_k^a, \tilde Y_k^w|Y_k^a,Y_k^w}\left[\mathbb I\left\{\mathbb P_{\Theta^a,\Theta^w|Y_k^a+\tilde Y_k^a,Y_k^w+\tilde Y_k^w}(\theta^w<\theta^a)>k\right\}\right] \\
-&= \sum_{i=0}^{\tilde n_k^a} \sum_{j=0}^{n_k^w} \mathbb I\left\{\int_0^1 \tilde \pi_k^a(\theta^a|y_k^a + i) \left[\int_0^{\theta^a} \tilde \pi_k^w(\theta^w|y_k^w + j)d\theta^w\right] d\theta^a>q\right\} \tilde f_k^w(j|y_k^w)\tilde f_k^a(i|y_k^a)
+\tilde \pi_k^i(\theta^i|y_k^i + \tilde y_k^i) &= \text{Beta}(\theta^i|a^i+y_k^i+\tilde y_k^i, b^i+n_k^i+\tilde n_k^i - y_k^i-\tilde y_k^i)\\
+\tilde P_k &= \mathbb P_{\Theta^a,\Theta^w|Y_k^a+\tilde Y_k^a,Y_k^w+\tilde Y_k^w}(\theta^w<\theta^a) \\
+&= \int_0^1 \tilde \pi_k^a(\theta^a|y_k^a + \tilde y_k^a) \left[\int_0^{\theta^a} \tilde \pi_k^w(\theta^w|y_k^w + \tilde y_k^w)d\theta^w\right] d\theta^a \\
+\text{PPoS}_k(q) &= \mathbb E_{\tilde Y_k^a, \tilde Y_k^w|Y_k^a,Y_k^w}\left[\mathbb I\left\{\tilde P_k > q\right\}\right] \\
+&= \sum_{i=0}^{\tilde n_k^a} \sum_{j=0}^{n_k^w} \mathbb I\left\{\tilde P_k>q\right\} \tilde f_k^w(j|y_k^w)\tilde f_k^a(i|y_k^a)
 \end{aligned}
 $$
 
 The quantity $P_k$ cannot be calculated analytically but can be evaluated numerically or estimated using Monte Carlo methods. Although $\text{PPoS}_k$ can be computed analytically (assuming we have calculated the relevant $\tilde P_k$) it may still be more efficient to estimate using Monte Carlo methods for large sample sizes.
 
 Other options for speeding things up is to pre-determine all possible $\tilde P_k$ values for the possible values of $i,j$, or to determine which $i,j$ have probability greater than some minimum threshold (e.g. $10^{-8}$) and only determine $\tilde P_k$ for that subset of possibilities.
+
+## Decision Rules
+
+At the final analysis (full follow-up on all individuals), a terminal decision is made regarding the difference in response between the two vaccines. This decision rule declares $\theta_w < \theta_a$, $\theta_w \geq \theta_a$, or that the study was inconclusive.
+$$
+\delta_K(y_K) = \begin{cases}
+a_0 \text{ if } P_k \leq \underline c_K &\implies \text{accept } H_0 \\
+a_1 \text{ if } P_k \geq \overline c_K &\implies \text{accept } H_1 \\
+a_2 \text{ otherwise } &\implies \text{inconclusive}
+\end{cases}
+$$
+At each interim analysis, a decision is made whether the study should be stopped for futility, expected success, or to continue enrolment. This decision is based on $\text{PPoS}_k(q)$ which depends on the chosen $q$. Perhaps setting $q=\overline c_K$ makes the most sense, as this is the criteria which would be used in assessing success at the final analysis.
+$$
+\delta_k(y_k) = \begin{cases}
+a_3 \text{ if } \text{PPoS}_k(\overline c_K) < \underline \kappa_k &\implies \text{futile to continue} \\
+a_4 \text{ if } \text{PPoS}_k(\overline c_K) > \overline \kappa_k &\implies \text{expect success at interim} \\
+a_5 \text{ otherwise } &\implies \text{continue to enrol to } k+1.
+\end{cases}
+$$
+What happens if we stop for futility/expected success and follow-up the remaining individuals already enrolled? Undertake a new final analysis based on these data using $\delta_K(y_K)$ but only on the reduced sample size, i.e. make our final decision based on observed $\tilde P_k$?
+
 
 
 ## Logistic Regression
@@ -188,13 +216,15 @@ $$
 
 # Simulations
 
-Parameters we need to configure are:
+We want to investigate the operating characteristics of the trial for varying $\theta^a$ and $\theta^w$ and determine appropriate values of the following trial parameterse:
 
   * $\underline c_K, \overline c_K$ - the bounds used at the final analysis for decisions
-  * $q_k$ - the bounds used for determining posterior probability of success in $\text{PPos}_k$ (should this just be $\overline c_K$?)
+  * $q$ - the value used in $\text{PPoS}(q)$ - should this just be set to $\overline c_K$?
+  * $(\underline{\kappa}_k, \overline{\kappa}_k)$ - the bounds used for determining futility and expected success at interim analyses
+  
+We assume two accrual scenarios: 20 per week and 10 per week.
 
 ```{r, eval=F}
-source("r/binary_two_arm_functions.R")
 n_foll <- seq(500, 3000, 500)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
@@ -244,28 +274,283 @@ ggplot(sce_ppos, aes(ptail, ppos_final)) +
 n_foll <- seq(500, 3000, 500)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
-sims <- 10
+sims <- 500
 scenarios <- data.frame(scenario = 1:6,
                         p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
                         p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+
+# pt <- proc.time()
+# out <- lapply(1:nrow(scenarios),
+#        function(i) {
+#          sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+#                              n1int = n_foll, n2int = n_foll)
+#          # Get PPoS at final sample size
+#          sce_ppos <- calc_scenario_ppos(
+#            sce, k_ppos = 0.95, post_method = "approx", 
+#            pp_sim = 1e4, ppos_name = "ppos_final")
+#          # Get PPoS at interim imputing missing follow-up
+#          sce_ppos <- calc_scenario_ppos(
+#            sce_ppos, k_ppos = 0.95, m1int = n_miss, m2int = n_miss, 
+#            post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
+#         
+#          res <- decide_trial(sce_ppos)
+#          res <- sce_ppos[res, on = .(sim_id, stage)]
+#          return(res)
+#        })
+# rt <- proc.time() - pt
+# out <- rbindlist(out, idcol = "scenario")
+
 pt <- proc.time()
-out <- lapply(1:nrow(scenarios),
-       function(i) {
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
          sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
                              n1int = n_foll, n2int = n_foll)
          # Get PPoS at final sample size
          sce_ppos <- calc_scenario_ppos(
-           sce, k_ppos = 0.9, post_method = "approx", 
+           sce, k_ppos = 0.95, post_method = "approx", 
            pp_sim = 1e4, ppos_name = "ppos_final")
          # Get PPoS at interim imputing missing follow-up
          sce_ppos <- calc_scenario_ppos(
-           sce_ppos, k_ppos = 0.9, m1int = n_miss, m2int = n_miss, 
+           sce_ppos, k_ppos = 0.95, m1int = n_miss, m2int = n_miss, 
            post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
         
          res <- decide_trial(sce_ppos)
          res <- sce_ppos[res, on = .(sim_id, stage)]
-         return(res)
-       })
-proc.time() - pt
+         res
+  }
+rt <- proc.time() - pt
 out <- rbindlist(out, idcol = "scenario")
 ```
+
+Run-time was `r sprintf("%.1f", rt[3]/60)` minutes.
+
+
+```{r}
+tab <- out[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < 6)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- out[,
+    .(expected_n = mean(n1 + n2),
+      expected_p1 = mean(a1 / (a1 + b1)),
+      expected_p2 = mean(a2 / (a2 + b2))),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb E(N)$",
+                    "$\\mathbb E(\\theta^a)$",
+                    "$\\mathbb E(\\theta^w)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r, fig.height = 4}
+ggplot(out[, .N, keyby = .(res, n1, p1tru, p2tru)], aes(n1, N)) + 
+  facet_grid(paste(p1tru,p2tru,sep=", ") ~ res) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = seq(250, 1500, 500)) +
+  labs(x = "Sample size in each group", y = "Number of trials") +
+  theme(panel.grid = element_blank())
+```
+
+## 10 Week
+
+
+```{r, cache = TRUE}
+n_foll <- seq(500, 3000, 500)/2
+n_enro <- pmin(3000/2, n_foll + 800/2)
+n_miss <- n_enro - n_foll
+sims <- 500
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+
+pt <- proc.time()
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(
+           sce, k_ppos = 0.95, post_method = "approx", 
+           pp_sim = 1e4, ppos_name = "ppos_final")
+         # Get PPoS at interim imputing missing follow-up
+         sce_ppos <- calc_scenario_ppos(
+           sce_ppos, k_ppos = 0.95, m1int = n_miss, m2int = n_miss, 
+           post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
+        
+         res <- decide_trial(sce_ppos)
+         res <- sce_ppos[res, on = .(sim_id, stage)]
+         res
+  }
+rt <- proc.time() - pt
+out <- rbindlist(out, idcol = "scenario")
+```
+
+Run-time was `r sprintf("%.1f", rt[3]/60)` minutes.
+
+```{r}
+tab <- out[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < 6)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- out[,
+    .(expected_n = mean(n1 + n2),
+      expected_p1 = mean(a1 / (a1 + b1)),
+      expected_p2 = mean(a2 / (a2 + b2))),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb E(N)$",
+                    "$\\mathbb E(\\theta^a)$",
+                    "$\\mathbb E(\\theta^w)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r, fig.height = 4}
+ggplot(out[, .N, keyby = .(res, n1, p1tru, p2tru)], aes(n1, N)) + 
+  facet_grid(paste(p1tru,p2tru,sep=", ") ~ res) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = seq(250, 1500, 500)) +
+  labs(x = "Sample size in each group", y = "Number of trials") +
+  theme(panel.grid = element_blank())
+```
+
+\clearpage
+
+# Simulation Details
+
+## Beta Inequalities
+
+In the two arm case we are generally interested in at least one of the following equivalent probabilities
+$$
+\begin{aligned}
+\mathbb P_{X,Y}(X > Y + \delta) &= \int_\delta^1\int_0^{X-\delta}f(y)dyf(x)dx \\
+&= \int_\delta^1 f_X(x)F_Y(x-\delta)dx \\
+&= 1 - \mathbb P_{X,Y}(X < Y + \delta) \\
+\mathbb P_{X,Y}(Y < X - \delta) &= \int_0^{1-\delta}\int_{Y+\delta}^1f(x)dxf(y)dy \\
+&= \int_0^{1-\delta}f_Y(y)(1 - F_X(y+\delta))dy \\
+&= 1 - \mathbb P_{X,Y}(Y > X -\delta)
+\end{aligned}
+$$
+where $X\sim\text{Beta}(a,b)$ and $Y\sim\text{Beta}(c,d)$ are independent Beta distributions. The probability of the event, $X>Y+\delta$, cannot be caluclated analytically, but can do done so using numerical integration over a univariate integral (for reasonable values of the parameters).
+
+In the interest of speed we might alternatively approximate the Beta distributions by Normal distributions. The approximation should be satisfactory if $\frac{a+1}{a-1}\approx 1$ and $\frac{b+1}{b-1}\approx 1$ in which case
+$$
+\text{Beta}(a,b)\sim N\left(\frac{a}{a+b}, \frac{ab}{(a+b)^2(a+b+1)}\right).
+$$
+
+
+```{r, fig.cap="Example Normal approximation to Beta densities."}
+par(mfrow = c(2,2), oma = c(1,1,1,1), mar = c(1,1,1,1), cex = 0.5)
+plot_beta_norm(2, 100, xlim = c(0, 0.2), xaxt = 'n', yaxt = 'n', main = "Beta(2,100)")
+plot_beta_norm(5, 100, xlim = c(0, 0.2), xaxt = 'n', yaxt = 'n', main = "Beta(5,100)")
+plot_beta_norm(10, 100, xlim = c(0, 0.2), xaxt = 'n', yaxt = 'n', main = "Beta(10,100)")
+plot_beta_norm(15, 100, xlim = c(0, 0.2), xaxt = 'n', yaxt = 'n', main = "Beta(15,100)")
+```
+
+Then we estimate the inequality by
+$$
+\begin{aligned}
+m_X &= \frac{a}{a+b} \\
+s^2_X &= \frac{ab}{(a+b)^2(a+b+1)}\\
+m_Y &= \frac{c}{c+d} \\
+s^2_Y &= \frac{cd}{(c+d)^2(c+d+1)}\\
+z &= \frac{m_X - m_Y - \delta}{\sqrt{s_X^2+s_Y^2}} \\
+\mathbb P_{X,Y}(X>Y+\delta)&\approx \Phi(z)
+\end{aligned}
+$$
+
+
+```{r}
+library(bench)
+mark(
+  beta_ineq(3, 100, 13, 90),
+  beta_ineq_approx(3, 100, 13, 90),
+  beta_ineq_sim(3, 100, 13, 90, sims = 1000),
+  check = F
+) %>%
+  arrange(median) %>%
+  select(expression, min, mean, median, max, `itr/sec`) %>%
+  kable(row.names = F, booktabs = TRUE, digits = 2) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+```
+
+Approximation is also reasonably accurate for most parameter settings, in the worse case, it is no worse than the error which may occur using Monte Carlo estimate with 1,000 particles.
+
+```{r, fig.cap="Deviation from exact value (adaptive quadrature) of $\\mathbb P(X>Y+\\delta)$."}
+P_exact <- outer(0:50, 0:50, function(x, y) Vectorize(beta_ineq)(1+x, 1+50-x, 1+y, 1+50-y))
+P_approx <- outer(0:50, 0:50, function(x, y) Vectorize(beta_ineq_approx)(1+x, 1+50-x, 1+y, 1+50-y))
+P_sim <- outer(0:50, 0:50, function(x, y) Vectorize(beta_ineq_sim)(1+x, 1+50-x, 1+y, 1+50-y, sims = 1000))
+
+par(mfrow = c(1, 2), mar = c(4,1,1,1), oma = c(0,1,1,1), mgp = c(2, 1, 0), cex = 0.7)
+matplot(P_approx - P_exact, type = 'l', lty = 1, col = "grey50", ylim = c(-0.08, 0.08), main = "Approx", xlab = "a")
+matplot(P_sim - P_exact, type = 'l', lty = 1, col = "grey50", ylim = c(-0.08, 0.08), main = "Sim (N = 1,000)", xlab = "a")
+```
+
+A trade-off may be to use exact or simulation methods for parameter values where the approximation is known to be poor, and use the approximation otherwise.
+
+## Posterior Predictive Probabilities
+
+To compute the predictive probability of success we take the expectation of an indicator function with respect to the posterior predictive distribution of the joint outcomes. In the two arm case this is a double summation over the domain.
+
+We can:
+
+  * Compute exactly by enumerating over all $0:\tilde n_k^a$ and $0:\tilde n_k^w$ and compute $\tilde P_k$ for every value, however for large $n_k^i$ this becomes computationally intensive.
+  * Use Monte Carlo estimates by drawing $\tilde y_k^{i,j}\sim \tilde f_k(\tilde y_k^i|y_k^i),j=1,...,N$ for each $i$ and average the values of $\mathbb I\{\tilde P_k>q\}$, noting that we can probably just estimate the tail probability once for each unique combination of $(\tilde y_k^{a,j},y_k^{w,j})$ and scale by the number of occurences, reducing the number of $\tilde P_k$ we need to compute.
+  * Pre-determine the values which have relatively large contribution to the posterior predictive density (e.g. say within $10^{-6}$ of the largest probability) and only compute $\tilde P_k$ for these values, noting that this will slightly under-estimate the probability by not by much more than $10^{-6}$.
+  
+For small sample sizes should just enumerate over all values, but for larger predicted sample sizes use Monte Carlo.

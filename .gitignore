@@ -25,7 +25,8 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 # Installed document files
-/inst/doc/
+/inst/rmd/*_cache/
+/inst/rmd/*_files/
 .Rproj.user
 
 # Working files for experimentation

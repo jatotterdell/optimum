@@ -429,6 +429,7 @@ decide_trial <- function(
 #' @export
 plot_trial <- function(trial, par_seq) {
   if(requireNamespace('ggridges', quietly = TRUE)) {
+    pal <- viridisLite::viridis(2)
     d1 <- data.table::melt(trial[, lapply(par_seq, function(x) dbeta(x, a1, b1)), by = list(stage, s1 = a1, s2 = b1)], 
                id.vars = c("stage", "s1", "s2"))[order(stage, variable), `:=`(grp = "1", parm = par_seq)]
     d2 <- data.table::melt(trial[, lapply(par_seq, function(x) dbeta(x, a2, b2)), by = list(stage, s1 = a2, s2 = b2)], 
@@ -439,12 +440,13 @@ plot_trial <- function(trial, par_seq) {
       ggridges::geom_density_ridges(ggplot2::aes(fill = paste(stage, grp)), stat = "identity",
                           alpha = 0.8, colour = "grey50") +
       ggridges::scale_fill_cyclical(
-        breaks = c("1", "2"),
-        labels = c(`1` = "1", `2` = "2"),
-        values = c("#ff8080", "#8080ff"),
-        name = "Option", guide = "legend"
+        labels = c(bquote(theta[a]~"="~.(unique(trial$p1tru))), 
+                   bquote(theta[w]~"="~.(unique(trial$p2tru)))),
+        # values = c("#ff8080", "#8080ff"),
+        values = c(pal[1], pal[2]),
+        name = "Parameter", guide = "legend"
       ) +
-      ggplot2::labs(x = bquote(theta), y = "stage")  
+      ggplot2::labs(x = bquote(theta), y = "Stage")  
   }
 }
 

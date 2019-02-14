@@ -1,6 +1,6 @@
 ---
-title: "Optimum Simulations"
-subtitle: "wP vs aP"
+title: "OPTIMUM Simulations/Stats Notes"
+subtitle: "OPTimising IMmunisation Using Mixed schedules"
 author: "Prepared by: James Totterdell"
 date: "`r Sys.Date()`"
 output: 
@@ -34,6 +34,7 @@ library(tidyverse)
 library(tidybayes)
 library(kableExtra)
 library(doParallel)
+library(latex2exp)
 
 theme_set(theme_bw(base_size = 9))
 
@@ -64,7 +65,7 @@ Suppose accrual is 10 infants per week, then, by the time we have follow-up on t
 The minimum acrrual rate needed to enroll 3,000 infants over 5 years is about 11.5 per week.
 
 
-```{r, fig.cap="Assumed accrual rate and associated delay of information.", fig.height = 5}
+```{r, fig.cap="Assumed accrual rate and associated delay of information.", fig.height = 4}
 H <- function(x) as.numeric(x>0)
 
 weeks_followup <- 78
@@ -131,21 +132,23 @@ grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "first"))
 
 ## Model
 
-Let $\theta_a$ be the proportion of infants with food allergy who received the acellular pertussis vaccine, and $\theta_w$ the proportion of infants wit hfood allergy who received the whole-cell pertussis vaccine. We are interested in estimating $\delta = \theta_w - \theta_a$ and our hypothesis corresponds to
+Let $\theta_a$ be the probability with food allergy amongst infants who receive the acellular pertussis vaccine at first dose, and $\theta_w$ the probability of food allergy amongst infants received the whole-cell pertussis vaccine at first dose. We are interested in estimating $\delta = \theta_w - \theta_a$ and investigating the statistical hypothesis
 $$
 \begin{aligned}
 H_0: \delta &\geq 0 \\
 H_1: \delta &< 0
 \end{aligned}
 $$
-That is, that $\theta_w$ is no improvement over $\theta_a$ versus $\theta_w$ is lower than $\theta_a$.
+That is, that $\theta_w$ is no better than $\theta_a$ versus $\theta_w$ is lower than $\theta_a$.
 
 We could approach this in two ways:
 
-  * We might model $\theta_a$ and $\theta_w$ directly using independent Beta-Binomial models and integrate over the random variable $\delta$ to obtain posterior probabilities. The advantage is simplicity.
-  * We might model $\theta_a = 1 / (1 + \exp(\beta_0)$, and $\theta_b = 1/(1+\exp(-\beta_0-\beta_1))$, that is as a logistic regression model, where $\delta = \beta_2$ is our parameter of interest (the difference in log-odds). The advantage we can incorporate more complexity (subgroups, partial pooling etc).
+  * We might model $\theta_a$ and $\theta_w$ directly using independent Beta-Binomial models and integrate over the random variable $\delta$ to obtain posterior probabilities. The advantage is simplicity in the computations.
+  * We might model $\theta_a = 1 / (1 + \exp(\beta_0)$, and $\theta_b = 1/(1+\exp(-\beta_0-\beta_1))$, that is as a logistic regression model, where $\delta = \beta_2$ is our parameter of interest (the difference in log-odds). The advantage we can incorporate more complexity (adjust for confoudners, partial pooling etc), and explore subgroup effects.
   
 Given the lengthy delay in information, we will likely utilise posterior predictive probabilities at any interim analyses to impute the as yet unobserved data.
+
+For the purpose of simplifying the simulations the independent Beta-Binomial models make sense. However, for the actual analyses, if covariates are to be included, logistic or logistic mixed models would be used. In any case, the Beta-Binomial model should reasonable approximate a main effects only logistic regression. Including confounders should only improve power.
 
 ## Independent Beta-Binomial Models
 
@@ -172,7 +175,6 @@ $$
 
 The quantity $P_k$ cannot be calculated analytically but can be evaluated numerically or estimated using Monte Carlo methods. Although $\text{PPoS}_k$ can be computed analytically (assuming we have calculated the relevant $\tilde P_k$) it may still be more efficient to estimate using Monte Carlo methods for large sample sizes.
 
-Other options for speeding things up is to pre-determine all possible $\tilde P_k$ values for the possible values of $i,j$, or to determine which $i,j$ have probability greater than some minimum threshold (e.g. $10^{-8}$) and only determine $\tilde P_k$ for that subset of possibilities.
 
 ## Decision Rules
 
@@ -184,7 +186,7 @@ a_1 \text{ if } P_k \geq \overline c_K &\implies \text{accept } H_1 \\
 a_2 \text{ otherwise } &\implies \text{inconclusive}
 \end{cases}
 $$
-At each interim analysis, a decision is made whether the study should be stopped for futility, expected success, or to continue enrolment. This decision is based on $\text{PPoS}_k(q)$ which depends on the chosen $q$. Perhaps setting $q=\overline c_K$ makes the most sense, as this is the criteria which would be used in assessing success at the final analysis.
+At each interim analysis, a decision is made whether the study should be stopped for futility, expected success, or to continue enrolment. This decision is based on $\text{PPoS}_k(q)$ which depends on the chosen $q$. Perhaps setting $q=\overline c_K$ makes the most sense, as this is the criteria which would be used in assessing success at the final analysis. The interim decision rule is then
 $$
 \delta_k(y_k) = \begin{cases}
 a_3 \text{ if } \text{PPoS}_k(\overline c_K) < \underline \kappa_k &\implies \text{futile to continue} \\
@@ -192,7 +194,9 @@ a_4 \text{ if } \text{PPoS}_k(\overline c_K) > \overline \kappa_k &\implies \tex
 a_5 \text{ otherwise } &\implies \text{continue to enrol to } k+1.
 \end{cases}
 $$
-What happens if we stop for futility/expected success and follow-up the remaining individuals already enrolled? Undertake a new final analysis based on these data using $\delta_K(y_K)$ but only on the reduced sample size, i.e. make our final decision based on observed $\tilde P_k$?
+If stop for futility, when remaining enrolled individuals are followed-up underatake another predicitve probabilitiy analysis of futility to the original full sample size.
+
+If stop for expected success, assess terminal decision rule when complete follow-up on remaining enrolled individuals is avaialable.
 
 
 
@@ -200,17 +204,17 @@ What happens if we stop for futility/expected success and follow-up the remainin
 
 Advantage is that we can incorporate additional covariates. However it complicates the simulations. Posterior probabilities are no longer analytically tractable, but instead must be approximated by Monte Carlo measures, or by approximating densities.
 
-We now specify
+Let $X$ denote fixed level design, and $Z$ the group-specific design, then we model
 $$
 \begin{aligned}
-\theta_k^a &= \text{logit}^{-1}(\beta_0) \\
-\theta_k^w &= \text{logit}^{-1}(\beta_0 + \beta_1) \\
-f_k(y_k^a|\theta_k^a) &= \text{Binomial}(y_k^a|n_k^a, \theta_k^a) \\
-f_k(y_k^w|\theta_k^w) &= \text{Binomial}(y_k^w|n_k^w, \theta_k^w) \\
-\pi_k(\theta_k^a|y_k^a) &\approx N^{-1}\sum_{i=1}^N \delta_{\theta_k^{a,i}}(d\theta_k^a),\quad\{\theta_k^{a,i}\}_{i=1}^N\sim\pi_k(\theta_k^a|y_k^a) \\
-\pi_k(\theta_k^a|y_k^a) &\approx \sum_{i=1}^N \delta_{\theta_k^{a,i}}(d\theta_k^a)
+\eta_i &= x_i^\top\beta +z_i^\top\gamma\\
+p_i &= \text{logit}^{-1}(\eta_i) \\
+f_k(y_{k,i}|\beta) &= \text{Bernoulli}(p_i) \\
+\pi_k(\beta|y_k) &\approx N^{-1}\sum_{j=1}^N \delta_{\beta^j}(d\beta),\quad \beta^{1:N}\sim\pi_k(\beta|y_k) \\
+\tilde f_k(\tilde y_k|\beta,\gamma) &\approx N^{-1}\sum_{j=1}^N \delta_{\tilde y_k^j}(\tilde y_k),\quad \tilde y_k^{1:N}\sim \tilde f_k(\tilde y_k|\beta,\gamma) 
 \end{aligned}
 $$
+
 
 \clearpage
 
@@ -218,63 +222,105 @@ $$
 
 We want to investigate the operating characteristics of the trial for varying $\theta^a$ and $\theta^w$ and determine appropriate values of the following trial parameterse:
 
-  * $\underline c_K, \overline c_K$ - the bounds used at the final analysis for decisions
+  * Prior parameters: $a^i$ and $b^i$.
+  * $(\underline c_K, \overline c_K$) - the bounds used at the final analysis for decisions
   * $q$ - the value used in $\text{PPoS}(q)$ - should this just be set to $\overline c_K$?
   * $(\underline{\kappa}_k, \overline{\kappa}_k)$ - the bounds used for determining futility and expected success at interim analyses
+  * The frequency of interim anlayses
   
-We assume two accrual scenarios: 20 per week and 10 per week.
+Assuming a maximum sample size of 3,000 (1,500 in each arm) at a fixed final anlaysis we estimate the following probability of success.
 
-```{r, eval=F}
-n_foll <- seq(500, 3000, 500)/2
+```{r, cache=TRUE}
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.1)*dbinom(y,1500,0.07))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p1 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.03)*dbinom(y,1500,0.015))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p2 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.28)*dbinom(y,1500,0.21))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p3 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+data.frame(p1tru = c(0.1, 0.03, 0.28),
+           p2tru = c(0.07, 0.015, 0.21),
+           p_1 = c(p1, p2, p3)) %>%
+  kable(booktabs = TRUE, digits = 3, escape=F,
+        col.names = c("$\\theta_w^\\star$", "$\\theta_w^\\star$", "$\\mathbb P(\\Theta_1|y_K)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+```
+  
+For assessing interim analyses, we assume two accrual scenarios: 20 per week and 10 per week. The difference between the two (apart from the total study length required), corresponds to varying the delay in information from follow-up. As previously stated, In the 20 per week case, we expect individuals with follow-up to be about 1,500 behind the number of individuals enrolled at the time of the first interim, whereas for 10 per week we expect individuals with follow-up to be about 800 behind at the number enrolled at the time of the first interim. This effects the value of $\text{PPoS}_k$ which will generally be closer to $P_k$ the larger the dimension of the posterior predictive distribution considered.
+
+## Example
+
+In the example we set $\theta_a = \theta_w = 0.1$, so that a result of success is a Type I error.
+
+```{r, cache=TRUE}
+set.seed(6547654)
+n_foll <- seq(500, 3000, 250)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
 
-sce <- sim_scenario(100, p1tru = 0.10, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+sce <- sim_scenario(100, p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
 
-system.time(sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.9, 
-                                        post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final"))
-system.time(sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.9, 
+sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.95, 
+                                        post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final")
+sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.95, 
                                             m1int = n_miss, m2int = n_miss, 
-                                            post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim"))
+                                            post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
 res <- decide_trial(sce_ppos)
-res[, .N, keyby = res][, .(res, N, P = N / sum(N))]
-
-out <- sce_ppos[res, on = .(sim_id, stage)][1, ]
-y1pred <- rbinom(10000, out$ppos_final_m1, out$p1tru)
-y2pred <- rbinom(10000, out$ppos_final_m2, out$p2tru)
-y1pred <- rbetabinom(10000, out$ppos_final_m1, out$a1, out$b1)
-y2pred <- rbetabinom(10000, out$ppos_final_m2, out$a2, out$b2)
-P <- beta_ineq_approx(out$a1 + y1pred, out$b1 + out$ppos_final_m1 - y1pred,
-                 out$a2 + y2pred, out$b2 + out$ppos_final_m2 - y2pred)
-mean(P > 0.9)
-
-# This makes sense, from n = 750 onwards the interim and final have
-# the same prospective sample size, for n = 250, 500 the final analysis
-# has larger prospective sample size, so should have higher probability of success
-ggplot(sce_ppos, aes(ppos_final, ppos_interim)) + 
-  facet_wrap( ~ n1) + 
-  geom_point() + 
-  geom_abline()
-
-ggplot(sce_ppos, aes(ptail, ppos_interim)) + 
-  facet_wrap( ~ n1) + 
-  geom_point() + 
-  geom_abline()
-
-ggplot(sce_ppos, aes(ptail, ppos_final)) + 
-  facet_wrap( ~ n1) + 
-  geom_point() + 
-  geom_abline()
 ```
 
 
-## 20 per week
+```{r, fig.height=7, fig.cap="Two example trial procession of posteriors."}
+p1 <- plot_trial(sce_ppos[sim_id == res[res == "futile" & stage > 1, sim_id][1]], 
+                 seq(0, 0.25, 0.001)) +
+  geom_text(data = sce_ppos[sim_id == res[res == "futile" & stage > 1, sim_id][1]],
+            aes(x = 0.02, y = stage + 0.4, 
+                label = unlist(lapply(sprintf('$P_k = %.2f$, $PPoS_k^{fin} = %.2f$', 
+                                              ptail, ppos_final), TeX)), 
+                height = NULL),
+            size = 2.5, parse = T) +
+  geom_text(data = res[res == "futile" & stage > 1][1],
+            aes(x = 0.2, y = stage + 0.4, label = paste("stop here because", res), height = NULL), 
+            size = 2.5) +
+  scale_y_continuous(breaks = 1:11) +
+  theme(legend.position = "top", panel.grid = element_blank()) +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5))
+
+p2 <- plot_trial(sce_ppos[sim_id == res[res == "expect success" & stage > 1, sim_id][1]], 
+                 seq(0, 0.25, 0.001)) +
+  geom_text(data = sce_ppos[sim_id == res[res == "expect success" & stage > 1, sim_id][1]],
+            aes(x = 0.02, y = stage + 0.4, 
+                label = unlist(lapply(sprintf('$P_k = %.2f$, $PPoS_k^{int} = %.2f$', 
+                                              ptail, ppos_interim), TeX)), 
+                height = NULL),
+            size = 2.5, parse = T) +
+  geom_text(data = res[res == "expect success" & stage > 1][1],
+            aes(x = 0.2, y = stage + 0.4, label = paste("stop here because", res), height = NULL), 
+            size = 2.5) +
+  scale_y_continuous(breaks = 1:11) +
+  guides(fill = "none") +
+  theme(panel.grid = element_blank())
+
+grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "last"))
+```
+
+
+\clearpage
+
+## Accrual - 20 per week
 
 ```{r, cache = TRUE}
-n_foll <- seq(500, 3000, 500)/2
+n_foll <- seq(500, 3000, 250)/2
 n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
-sims <- 500
+sims <- 1000
 scenarios <- data.frame(scenario = 1:6,
                         p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
                         p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
@@ -371,22 +417,27 @@ kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digit
 
 
 ```{r, fig.height = 4}
-ggplot(out[, .N, keyby = .(res, n1, p1tru, p2tru)], aes(n1, N)) + 
-  facet_grid(paste(p1tru,p2tru,sep=", ") ~ res) + 
+pdat <- out[, .N, keyby = .(res, n1, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
   geom_bar(stat = "identity") +
   scale_x_continuous(breaks = seq(250, 1500, 500)) +
   labs(x = "Sample size in each group", y = "Number of trials") +
   theme(panel.grid = element_blank())
 ```
 
-## 10 Week
+\clearpage
+
+## Accrual - 10 per week
 
 
 ```{r, cache = TRUE}
-n_foll <- seq(500, 3000, 500)/2
+n_foll <- seq(500, 3000, 250)/2
 n_enro <- pmin(3000/2, n_foll + 800/2)
 n_miss <- n_enro - n_foll
-sims <- 500
+sims <- 1000
 scenarios <- data.frame(scenario = 1:6,
                         p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
                         p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
@@ -427,7 +478,8 @@ tab <- out[,
       p_inconclusive = mean(res == "inconclusive"),
       p_stop_early = mean(stage < 6)),
     keyby = .(scenario, p1tru, p2tru)]
-kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(1,3,3,2,2,2,2,2,2,2,2),
       col.names = c("Scenario", 
                     "$\\theta_a^\\star$", 
                     "$\\theta_w^\\star$",
@@ -449,7 +501,8 @@ tab <- out[,
       expected_p1 = mean(a1 / (a1 + b1)),
       expected_p2 = mean(a2 / (a2 + b2))),
     keyby = .(scenario, p1tru, p2tru)]
-kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digits = 2,
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(1,3,3,2,2,2,2,2,2,2,2),
       col.names = c("Scenario", 
                     "$\\theta_a^\\star$", 
                     "$\\theta_w^\\star$",
@@ -461,8 +514,11 @@ kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), digit
 
 
 ```{r, fig.height = 4}
-ggplot(out[, .N, keyby = .(res, n1, p1tru, p2tru)], aes(n1, N)) + 
-  facet_grid(paste(p1tru,p2tru,sep=", ") ~ res) + 
+pdat <- out[, .N, keyby = .(res, n1, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
   geom_bar(stat = "identity") +
   scale_x_continuous(breaks = seq(250, 1500, 500)) +
   labs(x = "Sample size in each group", y = "Number of trials") +
@@ -554,3 +610,56 @@ We can:
   * Pre-determine the values which have relatively large contribution to the posterior predictive density (e.g. say within $10^{-6}$ of the largest probability) and only compute $\tilde P_k$ for these values, noting that this will slightly under-estimate the probability by not by much more than $10^{-6}$.
   
 For small sample sizes should just enumerate over all values, but for larger predicted sample sizes use Monte Carlo.
+
+Some notes:
+
+  * $\text{PPoS}_k \leq P_k$
+  * $\tilde n\to\infty \implies \text{PPoS}_k \to P_k$?
+
+```{r, fig.height=2.5, fig.width = 5,eval=F}
+# out <- sce_ppos[res, on = .(sim_id, stage)][1, ]
+# y1pred <- rbinom(10000, out$ppos_final_m1, out$p1tru)
+# y2pred <- rbinom(10000, out$ppos_final_m2, out$p2tru)
+# y1pred <- rbetabinom(10000, out$ppos_final_m1, out$a1, out$b1)
+# y2pred <- rbetabinom(10000, out$ppos_final_m2, out$a2, out$b2)
+# P <- beta_ineq_approx(out$a1 + y1pred, out$b1 + out$ppos_final_m1 - y1pred,
+#                  out$a2 + y2pred, out$b2 + out$ppos_final_m2 - y2pred)
+# mean(P > 0.95)
+n_foll <- seq(100, 1000, 100)/2
+n_enro <- pmin(1000/2, n_foll + 50/2)
+n_miss <- n_enro - n_foll
+
+sce <- sim_scenario(100, p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+# sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.95,
+#                                         post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_final")
+# sce_ppos <- calc_scenario_ppos(sce_ppos, k_ppos = 0.95, 
+#                                            m1int = n_miss,
+#                                            m2int = n_miss,
+#                                         post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_interim")
+sce_ppos <- calc_scenario_ppos(
+  sce_ppos, k_ppos = 0.95, 
+  m1int = seq(4500, 0, length.out=length(n_foll)),
+  m2int = seq(4500, 0, length.out=length(n_foll)),
+  post_method = "approx", pp_sim = 1e4, ppos_name = "ppos_test")
+
+# This makes sense, from n = 750 onwards the interim and final have
+# the same prospective sample size, for n = 250, 500 the final analysis
+# has larger prospective sample size, so should have higher probability of success
+# ggplot(sce_ppos, aes(ptail, ppos_interim)) +
+#   facet_wrap( ~ n1) +
+#   geom_point() +
+#   geom_abline() +
+#   labs(x = expression(P[k]), y = expression(PPoS[k]))
+# 
+# ggplot(sce_ppos, aes(ptail, ppos_final)) +
+#   facet_wrap( ~ n1) +
+#   geom_point() +
+#   geom_abline() +
+#   labs(x = expression(P[k]), y = expression(PPoS[k]))
+
+ggplot(sce_ppos, aes(ptail, ppos_test)) +
+  facet_wrap( ~ ppos_test_m1) +
+  geom_point() +
+  geom_abline() +
+  labs(x = expression(P[k]), y = expression(PPoS[k]))
+```

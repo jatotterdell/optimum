@@ -1,0 +1,214 @@
+---
+title: "Comparison of MCMC, VB, and Beta-Binomial Posterior Predictive"
+author: "James Totterdell"
+date: "16 February 2019"
+output: 
+  bookdown::html_document2:
+    fig_height: 4
+    fig_width: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r}
+library(brms)
+library(optimum)
+library(mvtnorm)
+library(ggplot2)
+library(gridExtra)
+```
+
+
+```{r}
+lpdf_pi <- function(p, mu, sigma) {
+  -(log(p / (1 - p)) - mu)^2 / (2*sigma^2) - 0.5*log(2*pi) - log(p*(1 - p)) - log(sigma)
+}
+pdf_pi <- function(p, mu, sigma)
+  exp(lpdf_pi(p, mu, sigma))
+```
+
+Wish to make a comparison between logistic regression and beta-binomial models. 
+
+# Priors
+
+Suppose $\theta_1\sim\text{Beta}(a,b)$ and $\theta_2\sim\text{Beta}(c,d)$ are priors on the parameters. What priors should be set on $\beta_0$ and $\beta_1$ to get something equivalent?
+
+If $\beta_0\sim N(\mu_0,\sigma_0^2)$, $\beta_1 \sim N(\mu_1,\sigma_1^2)$ then $\beta_0+\beta_1\sim N(\mu_0+\mu_1,\sigma_0^2+\sigma_1^2)$. Additionally, if $p_0 = \text{expit}(\beta_0)$ and $p_1 = \text{expit}(\beta_0+\beta_1)$ then 
+$$
+\begin{aligned}
+f(p_0|\mu_0,\sigma_0) &= 
+\frac{1}{\sigma_0\sqrt{2\pi}}\frac{1}{p_0(1-p_0)}e^{-\frac{(\text{logit}(p_0)-\mu_0)^2}{2\sigma_0^2}} \\
+f(p_1|\mu_0, \sigma_0, \mu_1, \sigma_1) &=
+\frac{1}{\sqrt{\sigma_0^2+\sigma_1^2}\sqrt{2\pi}}\frac{1}{p_1(1-p_1)}e^{-\frac{(\text{logit}(p_1)-\mu_0 - \mu_1)^2}{2(\sigma_0^2+\sigma_1^2)}}
+\end{aligned}
+$$
+
+```{r}
+parseq <- seq(0.001, 0.999, 0.001)
+s <- c(0.5, 1, 1.78)
+pdat <- data.frame(theta = rep(parseq, 3),
+                   p = exp(c(sapply(seq(0.001, 0.999, 0.001), lpdf_pi, mu = 0, s = s[1]),
+                     sapply(seq(0.001, 0.999, 0.001), lpdf_pi, mu = 0, s = s[2]),
+                     sapply(seq(0.001, 0.999, 0.001), lpdf_pi, mu = 0, s = s[3]))),
+           mu = rep(0, length(parseq)*3),
+           s = rep(s, each = length(parseq)))
+ggplot(pdat, aes(theta, p, colour = factor(s))) +
+  geom_line() +
+  scale_colour_discrete(expression(sigma))
+```
+
+So, suppose we set $\mu_0=\mu_1=0$ and $\sigma_0=\sigma_1=1$, then, on the probability scale we are specifying different priors for each parameter. So it will be impossible to have the two probabilities on the same prior. The variance of $p_1$ will always be greater than that of $p_0$.
+
+```{r}
+ggplot(data.frame(x = c(0, 1)), aes(x)) +
+  stat_function(fun = pdf_pi, geom = "line", args = list(mu = 0, sigma = 1),
+                aes(colour = "p0")) +
+  stat_function(fun = pdf_pi, geom = "line", args = list(mu = 0, sigma = sqrt(1 + 1)),
+                aes(colour = "p1")) +
+  scale_color_discrete("Prior on", labels = c(expression(p[0]), expression(p[1]))) +
+  labs(x = expression(theta), y = expression(f(theta))) +
+  xlim(0,1) + ylim(0, 3)
+```
+
+
+Suppose we approximate the posterior of $\beta$ in a logistic regression model by some member of the Normal family $q(\beta)$. We are interested in predicting the new Bernoulli random variable
+$$
+\mathbb P_{\tilde Y|Y}(Y=1) = \int \text{expit}(x^\top\beta)N(\beta|\mu,\Sigma)d\beta
+$$
+Following arguments in Bishop 2006 we can approximate this probability by
+
+
+```{r}
+x <- c(0, 1)
+X <- cbind(Intercept = 1, x = x)
+n <- c(25, 25)
+y <- c(12, 13)
+
+dat <- data.frame(x = x, y = y, n = n)
+fit_mcmc <- brm(y | trials(n) ~ x, data = dat, family = binomial, iter = 50000,
+                prior = c(prior(normal(0,1.75), class = "b"), prior(normal(0,sqrt(10)), class = "Intercept")))
+fit_vb <- vb_logistic_n(X, y, n, c(0, 0), diag(c(1.75^2, 10)), alg = "sj")
+
+hist(posterior_samples(fit_mcmc)[, 1], freq = F, main = "", breaks = 100)
+curve(dnorm(x, fit_vb$mu[1], fit_vb$Sigma[1,1]^(1/2)), add = T)
+
+ypred_mcmc <- posterior_predict(fit_mcmc)
+
+B <- rmvnorm(1e5, fit_vb$mu, fit_vb$Sigma)
+ypred_vb <- cbind(rbinom(1e5, 25, plogis(B[, 1])), rbinom(1e5, 25, plogis(B[, 1] + B[, 2])))
+ypred_m_vb <- plogis((X%*%fit_vb$mu) * 1 / sqrt(1 + pi*diag(fit_vb$Sigma)/8))
+
+
+p_y_mcmc <- prop.table(table(factor(ypred_mcmc[, 1], levels = 0:25)))
+p_y_vb <- prop.table(table(factor(ypred_vb[, 1], levels = 0:25)))
+par(mfrow = c(1, 3))
+plot(p_y_vb - p_y_mcmc)
+barplot(p_y_mcmc, ylim = c(0, 0.15), ylab = "p_y_mcmc")
+barplot(p_y_vb, ylim = c(0, 0.15), ylab = "p_y_vb")
+barplot(setNames(dbinom(0:25, 25, ypred_m_vb[1]), 0:25), ylim = c(0, 0.15))
+barplot(setNames(dbinom(0:25, 25, ypred_m_vb[1]), 0:25), ylim = c(0, 0.15))
+```
+
+
+# Example Trial
+
+
+```{r, fig.height = 8}
+X <- cbind(Int = 1, x = c(0, 1))
+n_foll <- seq(250, 1500, 125)
+n_enro <- pmin(1500, n_foll + 750)
+
+# Beta-Binomial model
+sim_dat <- sim_trial(p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll, a1 = 1, b1 = 1, a2 = 1, b2 = 1)
+sim_dat <- calc_scenario_ppos(sim_dat, ppos_name = "final", post_method = "exact")
+sim_dat <- calc_scenario_ppos(sim_dat, ppos_name = "interim", m1 = n_enro, m2 = n_enro, post_method = "exact")
+
+# Logistic model using VB
+pt <- proc.time()
+ptail_vb <- lapply(1:nrow(sim_dat), function(i) {
+  fit <- vb_logistic_n(X, sim_dat[i, c(y1, y2)], sim_dat[i, c(n1, n2)], 
+                       mu0 = c(0, 0), Sigma0 = diag(c(10, 10)), alg = "sj")
+  beta <- rmvnorm(1e3, fit$mu, fit$Sigma)
+  ypred <- data.table(y1 = rbinom(1e3, sim_dat[i, final_m1], plogis(beta[, 1])),
+                      y2 = rbinom(1e3, sim_dat[i, final_m2], plogis(beta[, 1] + beta[, 2])))
+  ypred <- ypred[, .N, keyby = .(y1, y2)]
+  for(j in 1:nrow(ypred)) {
+    pred_fit <- vb_logistic_n(X, 
+                              sim_dat[i, c(y1, y2)] + ypred[j, c(y1, y2)],
+                              sim_dat[i, c(n1, n2)] + sim_dat[i, c(final_m1, final_m2)],
+                              mu0 = c(0, 0), Sigma0 = diag(c(10, 10)), alg = "sj")
+    ypred[j, P := pnorm(0, pred_fit$mu[2], sqrt(pred_fit$Sigma[2,2]))]
+  }
+  ppos <- ypred[, sum(N*(P > 0.9)) / sum(N)]
+  ptail <- pnorm(0, fit$mu[2], sqrt(fit$Sigma[2,2]))
+  list(ptail, ppos, fit$mu, fit$Sigma)
+})
+proc.time() - pt
+
+m <- sapply(ptail_vb, `[[`, 3)
+s <- sapply(ptail_vb, `[[`, 4)
+
+par(mfrow = c(2, 2))
+hist(qlogis(rbeta(1e5, sim_dat[1, a1], sim_dat[1, b1])), freq = F, breaks = 100,
+     ylim = c(0, 2.5), main = "Beta-binomial posterior", xlab = "Log-odds")
+curve(dnorm(x, m[1, 1], sqrt(s[1, 1])), add = TRUE)
+legend("topleft", lty = 1, legend = "VB approx logistic model", bty = 'n')
+
+hist(qlogis(rbeta(1e5, sim_dat[1, a2], sim_dat[1, b2])) -
+     qlogis(rbeta(1e5, sim_dat[1, a1], sim_dat[1, b1])), 
+     freq = F, breaks = 100, ylim = c(0, 2.5), main = 'Beta-binomial posterior',
+     xlab = "Difference in log-odds")
+curve(dnorm(x, m[2, 1], sqrt(s[4, 1])), add = TRUE)
+legend("topleft", lty = 1, legend = "VB approx logistic model", bty = 'n')
+
+B <- rmvnorm(1e5, m[, 1], matrix(s[, 1], 2, 2))
+hist(plogis(B[, 1]), freq = F, breaks = 100, 
+     main = 'VB approx logistic model', xlab = bquote(theta[1]))
+curve(dbeta(x, sim_dat[1, a1], sim_dat[1, b1]), add = TRUE)
+legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
+
+hist(plogis(B[, 1] + B[, 2]), freq = F, breaks = 100, 
+     main = 'VB approx logistic model', xlab = bquote(theta[2]))
+curve(dbeta(x, sim_dat[1, a2], sim_dat[1, b2]), add = TRUE)
+legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
+
+
+par(mfrow = c(2, 2))
+hist(qlogis(rbeta(1e5, sim_dat[11, a1], sim_dat[11, b1])), freq = F, breaks = 100,
+     main = "Beta-binomial posterior", xlab = "Log-odds")
+curve(dnorm(x, m[1, 11], sqrt(s[1, 11])), add = TRUE)
+legend("topleft", lty = 1, legend = "VB approx logistic model", bty = 'n')
+
+hist(qlogis(rbeta(1e5, sim_dat[11, a2], sim_dat[11, b2])) -
+     qlogis(rbeta(1e5, sim_dat[11, a1], sim_dat[11, b1])), 
+     freq = F, breaks = 100, main = 'Beta-binomial posterior',
+     xlab = "Difference in log-odds")
+curve(dnorm(x, m[2, 11], sqrt(s[4, 11])), add = TRUE)
+legend("topleft", lty = 1, legend = "VB approx logistic model", bty = 'n')
+
+B <- rmvnorm(1e5, m[, 11], matrix(s[, 11], 2, 2))
+hist(plogis(B[, 1]), freq = F, breaks = 100, 
+     main = 'VB approx logistic model', xlab = bquote(theta[1]))
+curve(dbeta(x, sim_dat[11, a1], sim_dat[11, b1]), add = TRUE)
+legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
+
+hist(plogis(B[, 1] + B[, 2]), freq = F, breaks = 100, 
+     main = 'VB approx logistic model', xlab = bquote(theta[1]))
+curve(dbeta(x, sim_dat[11, a2], sim_dat[11, b2]), add = TRUE)
+legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
+```
+
+
+```{r}
+plot(sim_dat$ptail, sapply(ptail_vb, "[[", 1), xlim = c(0, 1), ylim = c(0, 1)); abline(0,1)
+plot(sim_dat$final, sapply(ptail_vb, "[[", 2), xlim = c(0, 1), ylim = c(0, 1)); abline(0,1)
+
+cbind(sim_dat[, .(ptail, final)], cbind(sapply(ptail_vb, "[[", 1), sapply(ptail_vb, "[[", 2)))
+```

@@ -23,8 +23,23 @@ dnorm_mat <- function(m) {
 #' @param eta2 The current value of the 2nd natural parameter
 #' @param eta1_p The prior value of the 1st natural parameter
 #' @param eta2_p The prior value of the 2nd natural parameter
+#' @export
 jaakkola_jordan <- function(X, y, eta1, eta2, eta1_p, eta2_p) {
     .Call(`_optimum_jaakkola_jordan`, X, y, eta1, eta2, eta1_p, eta2_p)
+}
+
+#' Perform Jaakkola-Jordan update of variational parameters
+#' 
+#' @param X The design matrix
+#' @param y The response vector
+#' @param n The trial vector
+#' @param eta1 The current value of 1st natural parameter
+#' @param eta2 The current value of the 2nd natural parameter
+#' @param eta1_p The prior value of the 1st natural parameter
+#' @param eta2_p The prior value of the 2nd natural parameter
+#' @export
+jaakkola_jordan_n <- function(X, y, n, eta1, eta2, eta1_p, eta2_p) {
+    .Call(`_optimum_jaakkola_jordan_n`, X, y, n, eta1, eta2, eta1_p, eta2_p)
 }
 
 #' Perform Saul-Jordan update of variational parameters
@@ -40,6 +55,21 @@ saul_jordan <- function(X, y, eta1, eta2, eta1_p, eta2_p, omega1) {
     .Call(`_optimum_saul_jordan`, X, y, eta1, eta2, eta1_p, eta2_p, omega1)
 }
 
+#' Perform Saul-Jordan update of variational parameters
+#' 
+#' @param X The design matrix
+#' @param y The response vector
+#' @param n The trial vector
+#' @param eta1 The current value of 1st natural parameter
+#' @param eta2 The current value of the 2nd natural parameter
+#' @param eta1_p The prior value of the 1st natural parameter
+#' @param eta2_p The prior value of the 2nd natural parameter
+#' @param omega1 The current value of the Omega1 variational parameter
+#' @export
+saul_jordan_n <- function(X, y, n, eta1, eta2, eta1_p, eta2_p, omega1) {
+    .Call(`_optimum_saul_jordan_n`, X, y, n, eta1, eta2, eta1_p, eta2_p, omega1)
+}
+
 #' Perform Knowles-Minka-Wand update of variational parameters
 #' 
 #' @param X The design matrix
@@ -52,6 +82,21 @@ saul_jordan <- function(X, y, eta1, eta2, eta1_p, eta2_p, omega1) {
 #' @param MS_s The
 knowles_minka_wand <- function(X, y, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s) {
     .Call(`_optimum_knowles_minka_wand`, X, y, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s)
+}
+
+#' Perform Knowles-Minka-Wand update of variational parameters
+#' 
+#' @param X The design matrix
+#' @param y The response vector
+#' @param n The trials vector
+#' @param eta1 The current value of 1st natural parameter
+#' @param eta2 The current value of the 2nd natural parameter
+#' @param eta1_p The prior value of the 1st natural parameter
+#' @param eta2_p The prior value of the 2nd natural parameter
+#' @param MS_p The 
+#' @param MS_s The
+knowles_minka_wand_n <- function(X, y, n, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s) {
+    .Call(`_optimum_knowles_minka_wand_n`, X, y, n, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s)
 }
 
 #' Perform variational inference for logistic regression model
@@ -69,5 +114,23 @@ knowles_minka_wand <- function(X, y, eta1, eta2, eta1_p, eta2_p, MS_p, MS_s) {
 #' @export
 vb_logistic <- function(X, y, mu0, Sigma0, tol = 1e-8, maxiter = 1000L, maxiter_jj = 25L, alg = "jj") {
     .Call(`_optimum_vb_logistic`, X, y, mu0, Sigma0, tol, maxiter, maxiter_jj, alg)
+}
+
+#' Perform variational inference for logistic regression model
+#' 
+#' @param X The design matrix
+#' @param y The response vector
+#' @param n The trial vector
+#' @param mu0 The prior mean for beta paramter
+#' @param Sigma0 The prior variance for beta parameter
+#' @param tol The tolerance level to assess convergence
+#' @param maxiter The maximum number of iterations
+#' @param maxiter_jj The maximum number of Jaakkola-Jordan iterations to initialise estimation
+#' @param alg The algorithm used for final estimation of variational parameters. 
+#' Must be one of "jj", "sj", "kmw".
+#' 
+#' @export
+vb_logistic_n <- function(X, y, n, mu0, Sigma0, tol = 1e-8, maxiter = 1000L, maxiter_jj = 25L, alg = "jj") {
+    .Call(`_optimum_vb_logistic_n`, X, y, n, mu0, Sigma0, tol, maxiter, maxiter_jj, alg)
 }
 

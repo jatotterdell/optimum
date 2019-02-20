@@ -290,8 +290,10 @@ sim_scenario <- function(sims, ...) {
 
 calc_trial_ppos <- function(
   trial, 
-  m1int = NULL,
-  m2int = NULL,
+  m1 = NULL, # Enrolled with no follow-up
+  m2 = NULL,
+  l1 = NULL, # Maximum left to follow-up
+  l2 = NULL,
   k_ppos = 0.9,
   ppos_method = "sim", 
   post_method = "approx",
@@ -300,50 +302,71 @@ calc_trial_ppos <- function(
   
   if(! post_method %in% c("exact", "approx")) stop("post_method must be either 'exact' or 'approx'.")
   if(! ppos_method %in% c("sim", "exact")) stop("ppos_method must be either 'sim' or 'exact'.")
-  if(is.null(m1int) || is.null(m2int)) {
-    m1int = max(trial$n1) - trial$n1
-    m2int = max(trial$n2) - trial$n2
+  if(any(is.null(c(m1, m2, l1, l2)))) {
+    stop("Must specify sample size numbers m1, m2, l1 and l2.")
   }
-  if(length(m1int) != length(m2int)) stop("m1int and m2int must have same dimension.")
-  if(length(trial$n1) != length(m1int)) stop("n1 and m1int must have same dimension.")
+  if(length(m1) != length(m2)) stop("m1 and m2 must have same dimension.")
+  if(length(l1) != length(l2)) stop("l1 and l2 must have same dimension.")
+  if(length(trial$n1) != length(m1)) stop("n1 and m1 must have same dimension.")
+  if(length(trial$n1) != length(l1)) stop("n1 and l1 must have same dimension.")
   
   calc_post <- ifelse(post_method == "exact", beta_ineq, beta_ineq_approx)
   
   n_analyses <- nrow(trial)
-  ppos <- rep(0, n_analyses)
+  n_max <- sum(trial[n_analyses, c(n1, n2)])
+  ppos_int <- rep(NA, n_analyses)
+  ppos_fin <- rep(NA, n_analyses)
   
   for(i in 1:n_analyses) {
-    if ((m1int > 0) || (m2int > 0)) {
-      
-      if (ppos_method == "sim") {
-        y1pred <- rbetabinom(pp_sim, m1int[i], trial$a1[i], trial$b1[i])
-        y2pred <- rbetabinom(pp_sim, m2int[i], trial$a2[i], trial$b2[i])
-        
-        # No point computing posterior for duplicate values
-        # just do once and multiply by the frequency
-        ypred <- data.table(y1pred, y2pred)[, .N, by = list(y1pred, y2pred)]
-        ypred[, P := Vectorize(calc_post)(trial$a1[i] + y1pred, 
-                                          trial$b1[i] + m1int[i] - y1pred, 
-                                          trial$a2[i] + y2pred,
-                                          trial$b2[i] + m2int[i] - y2pred)]
-        ppos[i] <- ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
+    # If no missing data, or number enrolled equal to maximum sample size, no point
+    # in doing PPoS check
+    current_enrolled <- trial$n1[i] + trial$n2[i] + m1[i] + m2[i]
+
+    # If current enrolled is more than maximum sample size,
+    # no point in stopping enrollment...
+    if(current_enrolled >= n_max) {
+      ppos_fin[i] <- NA
+      ppos_int[i] <- NA
+    } else {
+      # If no missing data to predict, just check ptail
+      if ((l1[i] == 0 & l2[i] == 0)) {
+        ppos_fin[i] <- as.numeric(trial$ptail[i] > k_ppos)
+      } else {
+        if (ppos_method == "sim") {
+          y1pred <- rbetabinom(pp_sim, l1[i], trial$a1[i], trial$b1[i])
+          y2pred <- rbetabinom(pp_sim, l2[i], trial$a2[i], trial$b2[i])
+          
+          # No point computing posterior for duplicate values
+          # just do once and multiply by the frequency
+          ypred <- data.table(y1pred, y2pred)[, .N, by = list(y1pred, y2pred)]
+          ypred[, P := Vectorize(calc_post)(trial$a1[i] + y1pred, 
+                                            trial$b1[i] + l1[i] - y1pred, 
+                                            trial$a2[i] + y2pred,
+                                            trial$b2[i] + l2[i] - y2pred)]
+          ppos_fin[i] <- ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
+        }
       }
-      
-      if (ppos_method == "exact") {
-        stop("Exact not implemented.")
-        P <- outer(0:m1int, 0:m2int, function(x, y) 
-          dbetabinom(x, m1int, trial$a1[i], trial$b1[i]) * dbetabinom(y, m2int, trial$a2[i], trial$b2[i]))
-        Post <- outer(0:m1int, 0:m1int, function(x,y) 
-          Vectorize(calc_post)(trial$a1[i] + x, trial$b1[i] + m1int - x,
-                               trial$a2[i] + y, trial$b2[i] + m2int - y))
+      if ((m1[i] == 0 & m2[i] == 0)) {
+        ppos_int[i] <-  as.numeric(trial$ptail[i] > k_ppos)
+      } else {
+        if (ppos_method == "sim") {
+          y1pred <- rbetabinom(pp_sim, m1[i], trial$a1[i], trial$b1[i])
+          y2pred <- rbetabinom(pp_sim, m2[i], trial$a2[i], trial$b2[i])
+          
+          # No point computing posterior for duplicate values
+          # just do once and multiply by the frequency
+          ypred <- data.table(y1pred, y2pred)[, .N, by = list(y1pred, y2pred)]
+          ypred[, P := Vectorize(calc_post)(trial$a1[i] + y1pred, 
+                                            trial$b1[i] + m1[i] - y1pred, 
+                                            trial$a2[i] + y2pred,
+                                            trial$b2[i] + m2[i] - y2pred)]
+          ppos_int[i] <- ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
+        }
       }
-      
     }
   }
-  trial[, (ppos_name) := ppos]
-  trial[, (paste0(ppos_name, "_cut")) := k_ppos]
-  trial[, (paste0(ppos_name, "_m1")) := m1int]
-  trial[, (paste0(ppos_name, "_m2")) := m2int]
+  trial[, `:=`(m1 = m1, m2 = m2, l1 = l1, l2 = l2)]
+  trial[, `:=`(ppos_int = ppos_int, ppos_fin = ppos_fin, ppos_cut = k_ppos)]
   invisible(trial)
 }
 
@@ -388,8 +411,6 @@ calc_scenario_ppos <- function(scenario, useParallel = FALSE, ...) {
 #' @export
 decide_trial <- function(
   trial,
-  fut_var = "ppos_final",
-  suc_var = "ppos_interim",
   fut_k = 0.1,
   suc_k = 0.9,
   inf_k = 0.05,
@@ -397,8 +418,8 @@ decide_trial <- function(
   
   trial[,
     {
-      fut <- match(TRUE, get(fut_var)[-.N] < fut_k)
-      suc <- match(TRUE, get(suc_var)[-.N] > suc_k)
+      fut <- match(TRUE, ppos_fin[-.N] < fut_k)
+      suc <- match(TRUE, ppos_int[-.N] > suc_k)
       if(any(!is.na(c(fut, suc)))) {
         res <- which.min(c(fut, suc))
         int <- min(c(fut, suc), na.rm = TRUE)

@@ -4,15 +4,11 @@
 \alias{decide_trial}
 \title{Apply a decision rule to a trial from `sim_trial`}
 \usage{
-decide_trial(trial, fut_var = "ppos_final", suc_var = "ppos_interim",
-  fut_k = 0.1, suc_k = 0.9, inf_k = 0.05, sup_k = 0.95)
+decide_trial(trial, fut_k = 0.1, suc_k = 0.9, inf_k = 0.05,
+  sup_k = 0.95)
 }
 \arguments{
 \item{trial}{The data.table fro the trial in question}
-
-\item{fut_var}{The name of the variable used for determining futility at interim analyses.}
-
-\item{suc_var}{The name of the variable used for determining success at interim analyses.}
 
 \item{fut_k}{The probability cut-off for futility.}
 
@@ -21,6 +17,10 @@ decide_trial(trial, fut_var = "ppos_final", suc_var = "ppos_interim",
 \item{inf_k}{The probability cut-off at final analysis for declaring theta_1 < theta_2}
 
 \item{sup_k}{The probability cut-off at final analysis for declaring theta_1 > theta_2}
+
+\item{fut_var}{The name of the variable used for determining futility at interim analyses.}
+
+\item{suc_var}{The name of the variable used for determining success at interim analyses.}
 }
 \value{
 A data.table of the stage at which a decision was made.

@@ -166,6 +166,162 @@ beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
   mean(X > Y + delta)
 }
 
+#' Simulate trial data using Poisson process for accrual rate
+#'
+#' @param sim_id The id for the simulated trial data
+#' @param p1tru True response rate under control
+#' @param p2tru True response rate under treatment
+#' @param nmax The maximum total sample size
+#' @param enro_rate The baseline acrrual rate
+#' @param enro_intensity Function for changing acrrual intensity
+#' @param resp_delay Function returning response time value
+#' @export
+sim_trial_dat <- function(
+  sim_id = 1,
+  p1tru  = 0.1,
+  p2tru  = 0.1,
+  nmax = 100,
+  enro_rate = 1,
+  enro_intensity = function(t) 1,
+  resp_delay = function(n) runif(n)
+) {
+  require(poisson)
+  require(data.table)
+  require(randomizr)
+  
+  enro_t <- nhpp.sim(rate = enro_rate, num.events = nmax, enro_intensity, prepend.t0 = F)
+  resp_t <- enro_t + resp_delay(nmax)
+  
+  d <- data.table(pid = 1:nmax,
+                  enro_t = enro_t,
+                  resp_t = resp_t,
+                  x = as.numeric(complete_ra(nmax, num_arms = 2)))
+  
+  d[order(resp_t), resp_o := 1:.N]
+  d[, y := rbinom(nmax, 1, prob = ifelse(x == 1, p1tru, p2tru))]
+  return(d)
+}
+
+#' Aggregate trial data over treatment
+#' 
+#' @export
+agg_trial_dat <- function(d, stage_n, min_rem = 10) {
+  resp_cut <- sort(d[, resp_t])[stage_n]
+  dd <- d[,
+          {
+            list(resp_n = stage_n,
+                 n = sapply(resp_cut, function(a) sum(resp_t <= a)),
+                 y = sapply(resp_cut, function(a) sum((resp_t <= a)*y)),
+                 m = sapply(resp_cut, function(a) sum(resp_t > a & enro_t <= a)),
+                 w = sapply(resp_cut, function(a) sum((resp_t > a & enro_t <= a)*y)),
+                 l = sapply(resp_cut, function(a) sum(enro_t > a)),
+                 z = sapply(resp_cut, function(a) sum((enro_t > a)*y))
+            )
+          }, by = x]
+  dcast(dd, resp_n ~ x, value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[l1 > min_rem | l2 > min_rem | resp_n == max(stage_n)]
+}
+
+#' Calculate trial probabilities (posterior and predictive)
+#' 
+#' @export
+est_trial_prob <- function(
+  d, 
+  ppos_q = 0.95, 
+  ppos_sim = 1000, 
+  post_method = "approx",
+  a1 = 1, b1 = 1, a2 = 1, b2 = 1
+) {
+  calc_post <- ifelse(post_method == "exact", beta_ineq, beta_ineq_approx)
+  ypred <- data.table(y1 = rep(0, ppos_sim),
+                      y2 = rep(0, ppos_sim))
+  d[, `:=`(a1 = a1 + y1,
+           b1 = b1 + n1 - y1,
+           a2 = a2 + y2,
+           b2 = a2 + n2 - y2)]
+  d[, `:=`(post = calc_post(a1, b1, a2, b2),
+           post_int = calc_post(a1 + w1, b1 + m1 - w1, a2 + w2, b2 + m2 - w2))]
+  d[, post_fin := post[.N]]
+  for(i in 1:(nrow(d) - 1)) {
+    # Do interim PPoS calculation
+    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1], d[i, a1], d[i, b1]),
+                 y2 = rbetabinom(ppos_sim, d[i, m2], d[i, a2], d[i, b2]))]
+    ypred_agg <- ypred[, .N, by = .(y1, y2)]
+    ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
+                                          d[i, b1 + m1] - y1, 
+                                          d[i, a2] + y2,
+                                          d[i, b2 + m2] - y2)]
+    d[i, paste0('ppos_int', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
+    
+    # Do final PPoS calculation
+    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1 + l1], d[i, a1 + w1 + z1], d[i, b1 + m1 + l1 - w1 - z1]),
+                 y2 = rbetabinom(ppos_sim, d[i, m2 + l2], d[i, a2 + w2 + z2], d[i, b2 + m2 + l2 - w2 - z2]))]
+    ypred_agg <- ypred[, .N, by = .(y1, y2)]
+    ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
+                                          d[i, b1 + m1 + l1] - y1, 
+                                          d[i, a2] + y2,
+                                          d[i, b2 + m2 + l2] - y2)]
+    d[i, paste0('ppos_fin', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
+  }
+  return(d)
+}
+
+#' Apply decision rule to trial data
+#' 
+#' @export
+dec_trial <- function(
+  trial,
+  fut_k = 0.1,
+  suc_k = 0.9,
+  inf_k = 0.05,
+  sup_k = 0.95) {
+  
+  # Use the ppos column which matches sup_k
+  ppos_cols <- grep(paste0(sup_k, "$"), names(trial), value = T)
+  if(length(ppos_cols) == 0) stop("sup_k did not match any columns in trial.")
+  
+  trial[,
+        {
+          fut <- match(TRUE, get(ppos_cols[2])[-.N] < fut_k)
+          suc <- match(TRUE, get(ppos_cols[1])[-.N] > suc_k)
+          if(any(!is.na(c(fut, suc)))) {
+            res <- which.min(c(fut, suc))
+            int <- min(c(fut, suc), na.rm = TRUE)
+            list(res = switch(res, "futile", "expect success"),
+                 fin = ifelse(post_int[int] > sup_k, "success", "failure"),
+                 stage = int,
+                 resp = n1[int] + n2[int],
+                 enro = n1[int] + n2[int] + m1[int] + m2[int],
+                 post = post[int],
+                 post_int = post_int[int],
+                 post_fin = post_fin[int],
+                 ppos_int = get(ppos_cols[2])[int],
+                 ppos_fin = get(ppos_cols[1])[int],
+                 fut_k = paste(fut_k, collapse = ","),
+                 suc_k = paste(suc_k, collapse = ","),
+                 inf_k = inf_k,
+                 sup_k = sup_k)
+          } else {
+            inf <- tail(post, 1) < tail(inf_k, 1)
+            sup <- tail(post, 1) > tail(sup_k, 1)
+            list(res = ifelse(inf, "inferior", ifelse(sup, "superior", "inconclusive")),
+                 fin = ifelse(post[.N] > sup_k, "success", "failure"),
+                 stage = .N,
+                 resp = n1[.N] + n2[.N],
+                 enro = n1[.N] + n2[.N] + m1[.N] + m2[.N],
+                 post = post[.N],
+                 post_int = post_int[.N],
+                 post_fin = post_fin[.N],
+                 ppos_int = get(ppos_cols[2])[.N],
+                 ppos_fin = get(ppos_cols[1])[.N],
+                 fut_k = paste(fut_k, collapse = ","),
+                 suc_k = paste(suc_k, collapse = ","),
+                 inf_k = inf_k,
+                 sup_k = sup_k)
+          }
+        }, by = sim_id]
+}
+
+
 #' Simulate Bayesian two-arm trial 
 #' with early termination for futility/success
 #' Model:

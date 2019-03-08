@@ -25,6 +25,8 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 # Installed document files
+/inst/rmd/*.rds
+/inst/rmd/*.log
 /inst/rmd/*_cache/
 /inst/rmd/*_files/
 .Rproj.user

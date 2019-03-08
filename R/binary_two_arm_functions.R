@@ -223,6 +223,15 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
 
 #' Calculate trial probabilities (posterior and predictive)
 #' 
+#' @param d The Trial data
+#' @param ppos_q The vector of cut-points to consider
+#' @param ppos_sim Number of simulations from posterior predictive to use in PPoS(q) calculation
+#' @param post_method Method used to calculate P(X > Y + delta), one of `exact` (integration), `approx` (normal), `sim` (monte carlo)
+#' @param a1 Prior shape for treatment 1
+#' @param b1 Prior scale for treatment 1
+#' @param a2 Prior shape for treatment 2
+#' @param b2 Prior scale for treatment 2
+#' @return Updates `d` inplace but also returns the updated `d`
 #' @export
 est_trial_prob <- function(
   d, 
@@ -231,16 +240,25 @@ est_trial_prob <- function(
   post_method = "approx",
   a1 = 1, b1 = 1, a2 = 1, b2 = 1
 ) {
-  calc_post <- ifelse(post_method == "exact", beta_ineq, beta_ineq_approx)
+  # What method used to estimate posterior probability?
+  calc_post <- switch(post_method,
+                      "exact" = beta_ineq,
+                      "approx" = beta_ineq_approx,
+                      "sim" = beta_ineq_sim)
+  # Setup storage for prediction
   ypred <- data.table(y1 = rep(0, ppos_sim),
                       y2 = rep(0, ppos_sim))
+  # Determine posterior parameters
   d[, `:=`(a1 = a1 + y1,
            b1 = b1 + n1 - y1,
            a2 = a2 + y2,
            b2 = a2 + n2 - y2)]
+  # Calculate posterior probabilities given current data and assuming follow-up of currently enrolled
   d[, `:=`(post = calc_post(a1, b1, a2, b2),
            post_int = calc_post(a1 + w1, b1 + m1 - w1, a2 + w2, b2 + m2 - w2))]
   d[, post_fin := post[.N]]
+  
+  # Calculate PPoS at each interim for currently enrolled and complete enrolment
   for(i in 1:(nrow(d) - 1)) {
     # Do interim PPoS calculation
     ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1], d[i, a1], d[i, b1]),

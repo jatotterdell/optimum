@@ -315,6 +315,16 @@ dec_trial <- function(
   # Use the ppos column which matches sup_k
   ppos_cols <- grep(paste0(sup_k, "$"), names(trial), value = T)
   if(length(ppos_cols) == 0) stop("sup_k did not match any columns in trial.")
+  max_stage <- trial[, .N, by = sim_id][, max(N)]
+  
+  if (length(fut_k) == 1)
+    fut_k <- rep(fut_k, max_stage)
+  if (length(suc_k) == 1)
+    suc_k <- rep(suc_k, max_stage)
+  if (length(fut_k) < (max_stage - 1))
+    stop("fut_k has too few elements")
+  if (length(suc_k) < (max_stage - 1))
+    stop("suc_k has too few elements")
   
   trial[,
         {
@@ -335,8 +345,8 @@ dec_trial <- function(
                  post_fin = post_fin[int],
                  ppos_int = get(ppos_cols[1])[int],
                  ppos_fin = get(ppos_cols[2])[int],
-                 fut_k = paste(fut_k, collapse = ","),
-                 suc_k = paste(suc_k, collapse = ","),
+                 fut_k = paste(unique(fut_k), collapse = ","),
+                 suc_k = paste(unique(suc_k), collapse = ","),
                  inf_k = inf_k,
                  sup_k = sup_k)
           } else {
@@ -354,8 +364,8 @@ dec_trial <- function(
                  post_fin = post_fin[.N],
                  ppos_int = get(ppos_cols[1])[.N],
                  ppos_fin = get(ppos_cols[2])[.N],
-                 fut_k = paste(fut_k, collapse = ","),
-                 suc_k = paste(suc_k, collapse = ","),
+                 fut_k = paste(unique(fut_k), collapse = ","),
+                 suc_k = paste(unique(suc_k), collapse = ","),
                  inf_k = inf_k,
                  sup_k = sup_k)
           }

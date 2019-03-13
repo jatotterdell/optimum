@@ -1,5 +1,5 @@
-Meta
 doc
+Meta
 inst/doc
 inst/sim_data
 inst/stan
@@ -7,7 +7,6 @@ inst/stan
 # History files
 .Rhistory
 .Rapp.history
-
 # Session Data files
 .RData
 # Example code in package build process

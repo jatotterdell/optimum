@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta name="author" content="James Totterdell" />
+
+<meta name="date" content="2019-03-13" />
+
+<title>Beta Inequalities</title>
+
+<script src="data:application/x-javascript;base64,JChkb2N1bWVudCkucmVhZHkoZnVuY3Rpb24oKXsKICAgIGlmICh0eXBlb2YgJCgnW2RhdGEtdG9nZ2xlPSJ0b29sdGlwIl0nKS50b29sdGlwID09PSAnZnVuY3Rpb24nKSB7CiAgICAgICAgJCgnW2RhdGEtdG9nZ2xlPSJ0b29sdGlwIl0nKS50b29sdGlwKCk7CiAgICB9CiAgICBpZiAoJCgnW2RhdGEtdG9nZ2xlPSJwb3BvdmVyIl0nKS5wb3BvdmVyID09PSAnZnVuY3Rpb24nKSB7CiAgICAgICAgJCgnW2RhdGEtdG9nZ2xlPSJwb3BvdmVyIl0nKS5wb3BvdmVyKCk7CiAgICB9Cn0pOwo="></script>
+
+
+
+
+
+<link href="data:text/css;charset=utf-8,body%20%7B%0Abackground%2Dcolor%3A%20%23fff%3B%0Amargin%3A%201em%20auto%3B%0Amax%2Dwidth%3A%20700px%3B%0Aoverflow%3A%20visible%3B%0Apadding%2Dleft%3A%202em%3B%0Apadding%2Dright%3A%202em%3B%0Afont%2Dfamily%3A%20%22Open%20Sans%22%2C%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0Afont%2Dsize%3A%2014px%3B%0Aline%2Dheight%3A%201%2E35%3B%0A%7D%0A%23header%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0A%23TOC%20%7B%0Aclear%3A%20both%3B%0Amargin%3A%200%200%2010px%2010px%3B%0Apadding%3A%204px%3B%0Awidth%3A%20400px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Aborder%2Dradius%3A%205px%3B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Afont%2Dsize%3A%2013px%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0A%23TOC%20%2Etoctitle%20%7B%0Afont%2Dweight%3A%20bold%3B%0Afont%2Dsize%3A%2015px%3B%0Amargin%2Dleft%3A%205px%3B%0A%7D%0A%23TOC%20ul%20%7B%0Apadding%2Dleft%3A%2040px%3B%0Amargin%2Dleft%3A%20%2D1%2E5em%3B%0Amargin%2Dtop%3A%205px%3B%0Amargin%2Dbottom%3A%205px%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%2Dleft%3A%20%2D2em%3B%0A%7D%0A%23TOC%20li%20%7B%0Aline%2Dheight%3A%2016px%3B%0A%7D%0Atable%20%7B%0Amargin%3A%201em%20auto%3B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dcolor%3A%20%23DDDDDD%3B%0Aborder%2Dstyle%3A%20outset%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0A%7D%0Atable%20th%20%7B%0Aborder%2Dwidth%3A%202px%3B%0Apadding%3A%205px%3B%0Aborder%2Dstyle%3A%20inset%3B%0A%7D%0Atable%20td%20%7B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dstyle%3A%20inset%3B%0Aline%2Dheight%3A%2018px%3B%0Apadding%3A%205px%205px%3B%0A%7D%0Atable%2C%20table%20th%2C%20table%20td%20%7B%0Aborder%2Dleft%2Dstyle%3A%20none%3B%0Aborder%2Dright%2Dstyle%3A%20none%3B%0A%7D%0Atable%20thead%2C%20table%20tr%2Eeven%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E5em%200%3B%0A%7D%0Ablockquote%20%7B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Apadding%3A%200%2E25em%200%2E75em%3B%0A%7D%0Ahr%20%7B%0Aborder%2Dstyle%3A%20solid%3B%0Aborder%3A%20none%3B%0Aborder%2Dtop%3A%201px%20solid%20%23777%3B%0Amargin%3A%2028px%200%3B%0A%7D%0Adl%20%7B%0Amargin%2Dleft%3A%200%3B%0A%7D%0Adl%20dd%20%7B%0Amargin%2Dbottom%3A%2013px%3B%0Amargin%2Dleft%3A%2013px%3B%0A%7D%0Adl%20dt%20%7B%0Afont%2Dweight%3A%20bold%3B%0A%7D%0Aul%20%7B%0Amargin%2Dtop%3A%200%3B%0A%7D%0Aul%20li%20%7B%0Alist%2Dstyle%3A%20circle%20outside%3B%0A%7D%0Aul%20ul%20%7B%0Amargin%2Dbottom%3A%200%3B%0A%7D%0Apre%2C%20code%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0Aborder%2Dradius%3A%203px%3B%0Acolor%3A%20%23333%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%20%0A%7D%0Apre%20%7B%0Aborder%2Dradius%3A%203px%3B%0Amargin%3A%205px%200px%2010px%200px%3B%0Apadding%3A%2010px%3B%0A%7D%0Apre%3Anot%28%5Bclass%5D%29%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Acode%20%7B%0Afont%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20%27Courier%20New%27%2C%20monospace%3B%0Afont%2Dsize%3A%2085%25%3B%0A%7D%0Ap%20%3E%20code%2C%20li%20%3E%20code%20%7B%0Apadding%3A%202px%200px%3B%0A%7D%0Adiv%2Efigure%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0Aimg%20%7B%0Abackground%2Dcolor%3A%20%23FFFFFF%3B%0Apadding%3A%202px%3B%0Aborder%3A%201px%20solid%20%23DDDDDD%3B%0Aborder%2Dradius%3A%203px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Amargin%3A%200%205px%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dtop%3A%200%3B%0Afont%2Dsize%3A%2035px%3B%0Aline%2Dheight%3A%2040px%3B%0A%7D%0Ah2%20%7B%0Aborder%2Dbottom%3A%204px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Apadding%2Dbottom%3A%202px%3B%0Afont%2Dsize%3A%20145%25%3B%0A%7D%0Ah3%20%7B%0Aborder%2Dbottom%3A%202px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Afont%2Dsize%3A%20120%25%3B%0A%7D%0Ah4%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23f7f7f7%3B%0Amargin%2Dleft%3A%208px%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Ah5%2C%20h6%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23ccc%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20%230033dd%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20%236666ff%3B%20%7D%0Aa%3Avisited%20%7B%0Acolor%3A%20%23800080%3B%20%7D%0Aa%3Avisited%3Ahover%20%7B%0Acolor%3A%20%23BB00BB%3B%20%7D%0Aa%5Bhref%5E%3D%22http%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0Aa%5Bhref%5E%3D%22https%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0A%0Acode%20%3E%20span%2Ekw%20%7B%20color%3A%20%23555%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Edt%20%7B%20color%3A%20%23902000%3B%20%7D%20%0Acode%20%3E%20span%2Edv%20%7B%20color%3A%20%2340a070%3B%20%7D%20%0Acode%20%3E%20span%2Ebn%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Efl%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Ech%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Est%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Eco%20%7B%20color%3A%20%23888888%3B%20font%2Dstyle%3A%20italic%3B%20%7D%20%0Acode%20%3E%20span%2Eot%20%7B%20color%3A%20%23007020%3B%20%7D%20%0Acode%20%3E%20span%2Eal%20%7B%20color%3A%20%23ff0000%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Efu%20%7B%20color%3A%20%23900%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%20code%20%3E%20span%2Eer%20%7B%20color%3A%20%23a61717%3B%20background%2Dcolor%3A%20%23e3d2d2%3B%20%7D%20%0A" rel="stylesheet" type="text/css" />
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Beta Inequalities</h1>
+<h4 class="author"><em>James Totterdell</em></h4>
+<h4 class="date"><em>2019-03-13</em></h4>
+
+
+
+<p>In the two arm case we are generally interested in at least one of the following equivalent probabilities <span class="math display">\[
+\begin{aligned}
+\mathbb P_{X,Y}(X &gt; Y + \delta) &amp;= \int_\delta^1\int_0^{X-\delta}f(y)dyf(x)dx \\
+&amp;= \int_\delta^1 f_X(x)F_Y(x-\delta)dx \\
+&amp;= 1 - \mathbb P_{X,Y}(X &lt; Y + \delta) \\
+\mathbb P_{X,Y}(Y &lt; X - \delta) &amp;= \int_0^{1-\delta}\int_{Y+\delta}^1f(x)dxf(y)dy \\
+&amp;= \int_0^{1-\delta}f_Y(y)(1 - F_X(y+\delta))dy \\
+&amp;= 1 - \mathbb P_{X,Y}(Y &gt; X -\delta)
+\end{aligned}
+\]</span> where <span class="math inline">\(X\sim\text{Beta}(a,b)\)</span> and <span class="math inline">\(Y\sim\text{Beta}(c,d)\)</span> are independent Beta distributions. The probability of the event, <span class="math inline">\(X&gt;Y+\delta\)</span>, cannot be caluclated analytically, but can do done so using numerical integration over a univariate integral (for reasonable values of the parameters).</p>
+<p>In fact, the exact PDF for <span class="math inline">\(\Theta = X - Y\)</span>, in the case that <span class="math inline">\(\delta=0\)</span> has been shown to be <span class="math display">\[
+f_\Theta(\theta) = \begin{cases}
+\frac{B(c,b)\theta^{b+d-1}(1 - \theta)^{c+b-1}}{B(a,b)B(c,d)}F_1(b,a+b+c+d-2,1-a;b+c;1-\theta,1-\theta^2)&amp;\text{ if }0&lt;\theta\leq 1 \\
+\frac{B(a+c-1,b+d-1)}{B(a,b)B(c,d)} &amp;\text{ if }\theta=0 \\
+\frac{B(a,d)(-\theta)^{b+d-1}(1+\theta)^{a+d-1}}{B(a,b)B(c,d)}F_1(d,1-c,a+b+c+d-2;a+d;1-\theta^2,1+\theta) &amp;\text{ if }-1\leq \theta &lt; 0
+\end{cases}
+\]</span> where <span class="math display">\[
+F_1(a,b_1,b_2;c;x_1,x_2) = 
+\]</span> is Appell function. However, functions to compute the above may be unstable.</p>
+<p>In the interest of speed we might alternatively approximate the Beta distributions by Normal distributions. The approximation should be satisfactory if <span class="math inline">\(\frac{a+1}{a-1}\approx 1\)</span> and <span class="math inline">\(\frac{b+1}{b-1}\approx 1\)</span> in which case <span class="math display">\[
+\text{Beta}(a,b)\sim N\left(\frac{a}{a+b}, \frac{ab}{(a+b)^2(a+b+1)}\right).
+\]</span></p>
+<div class="figure">
+<img src="data:image/png;base64,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" alt="Example Normal approximation to Beta densities." />
+<p class="caption">Example Normal approximation to Beta densities.</p>
+</div>
+<p>Then we estimate the inequality by <span class="math display">\[
+\begin{aligned}
+m_X &amp;= \frac{a}{a+b} \\
+s^2_X &amp;= \frac{ab}{(a+b)^2(a+b+1)}\\
+m_Y &amp;= \frac{c}{c+d} \\
+s^2_Y &amp;= \frac{cd}{(c+d)^2(c+d+1)}\\
+z &amp;= \frac{m_X - m_Y - \delta}{\sqrt{s_X^2+s_Y^2}} \\
+\mathbb P_{X,Y}(X&gt;Y+\delta)&amp;\approx \Phi(z)
+\end{aligned}
+\]</span> The approximation should be adequate for reasonable values of <span class="math inline">\((a,b,c,d)\)</span>.</p>
+<p><img src="data:image/png;base64,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" /><!-- --><img src="data:image/png;base64,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" /><!-- --></p>
+<p>The gain in computational speed is large.</p>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+expression
+</th>
+<th style="text-align:right;">
+min
+</th>
+<th style="text-align:right;">
+mean
+</th>
+<th style="text-align:right;">
+median
+</th>
+<th style="text-align:right;">
+max
+</th>
+<th style="text-align:right;">
+itr/sec
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+beta_ineq_approx(3, 100, 13, 90)
+</td>
+<td style="text-align:right;">
+20.79us
+</td>
+<td style="text-align:right;">
+27.21us
+</td>
+<td style="text-align:right;">
+22.61us
+</td>
+<td style="text-align:right;">
+251.3us
+</td>
+<td style="text-align:right;">
+36750.74
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+beta_ineq_sim(3, 100, 13, 90, sims = 1000)
+</td>
+<td style="text-align:right;">
+1.09ms
+</td>
+<td style="text-align:right;">
+1.6ms
+</td>
+<td style="text-align:right;">
+1.35ms
+</td>
+<td style="text-align:right;">
+12.3ms
+</td>
+<td style="text-align:right;">
+624.78
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+beta_ineq(3, 100, 13, 90)
+</td>
+<td style="text-align:right;">
+895.63us
+</td>
+<td style="text-align:right;">
+2.31ms
+</td>
+<td style="text-align:right;">
+1.84ms
+</td>
+<td style="text-align:right;">
+13.1ms
+</td>
+<td style="text-align:right;">
+433.66
+</td>
+</tr>
+</tbody>
+</table>
+<p>Approximation is also reasonably accurate for most parameter settings, in the worse case, it is no worse than the error which may occur using Monte Carlo estimate with 1,000 particles.</p>
+<div class="figure">
+<img src="data:image/png;base64,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" alt="Deviation from exact value (adaptive quadrature) of \mathbb P(X&gt;Y+\delta)." />
+<p class="caption">Deviation from exact value (adaptive quadrature) of <span class="math inline">\(\mathbb P(X&gt;Y+\delta)\)</span>.</p>
+</div>
+<p>A trade-off may be to use exact or simulation methods for parameter values where the approximation is known to be poor, and use the approximation otherwise.</p>
+
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

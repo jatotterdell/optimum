@@ -2,7 +2,9 @@
 title: "Comparison of MCMC, VB, and Beta-Binomial Posterior Predictive"
 author: "James Totterdell"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+output: 
+  rmarkdown::html_vignette:
+    fig_caption: yes
 vignette: >
   %\VignetteIndexEntry{Vignette Title}
   %\VignetteEngine{knitr::rmarkdown}
@@ -14,7 +16,8 @@ knitr::opts_chunk$set(
 	echo = FALSE,
 	message = FALSE,
 	warning = FALSE,
-  eval = FALSE # Change to TRUE if want to build vignette
+	comment = "#>",
+  eval = TRUE # Change to TRUE if want to build vignette
 )
 ```
 
@@ -51,6 +54,7 @@ f(p_1|\mu_0, \sigma_0, \mu_1, \sigma_1) &=
 \frac{1}{\sqrt{\sigma_0^2+\sigma_1^2}\sqrt{2\pi}}\frac{1}{p_1(1-p_1)}e^{-\frac{(\text{logit}(p_1)-\mu_0 - \mu_1)^2}{2(\sigma_0^2+\sigma_1^2)}}
 \end{aligned}
 $$
+That is, logit-normal.
 
 ```{r}
 parseq <- seq(0.001, 0.999, 0.001)
@@ -84,8 +88,8 @@ Suppose we approximate the posterior of $\beta$ in a logistic regression model b
 $$
 \mathbb P_{\tilde Y|Y}(Y=1) = \int \text{expit}(x^\top\beta)N(\beta|\mu,\Sigma)d\beta
 $$
-Following arguments in Bishop 2006 we can approximate this probability by
 
+Check how well VB posterior predictive alligns with posterior predictive from long HMC chain.
 
 ```{r}
 x <- c(0, 1)
@@ -98,8 +102,13 @@ fit_mcmc <- brm(y | trials(n) ~ x, data = dat, family = binomial, iter = 50000,
                 prior = c(prior(normal(0,1.75), class = "b"), prior(normal(0,sqrt(10)), class = "Intercept")))
 fit_vb <- vb_logistic_n(X, y, n, c(0, 0), diag(c(1.75^2, 10)), alg = "sj")
 
-hist(posterior_samples(fit_mcmc)[, 1], freq = F, main = "", breaks = 100)
+hist(posterior_samples(fit_mcmc)[, 1], freq = F, main = "VB vs. HMC posterior", breaks = 100,
+     xlab = expression(beta[0]))
 curve(dnorm(x, fit_vb$mu[1], fit_vb$Sigma[1,1]^(1/2)), add = T)
+
+hist(posterior_samples(fit_mcmc)[, 2], freq = F, main = "VB vs. HMC posterior", breaks = 100,
+     xlab = expression(beta[1]))
+curve(dnorm(x, fit_vb$mu[2], fit_vb$Sigma[2,2]^(1/2)), add = T)
 
 ypred_mcmc <- posterior_predict(fit_mcmc)
 
@@ -110,16 +119,15 @@ ypred_m_vb <- plogis((X%*%fit_vb$mu) * 1 / sqrt(1 + pi*diag(fit_vb$Sigma)/8))
 
 p_y_mcmc <- prop.table(table(factor(ypred_mcmc[, 1], levels = 0:25)))
 p_y_vb <- prop.table(table(factor(ypred_vb[, 1], levels = 0:25)))
-plot(p_y_vb - p_y_mcmc)
-barplot(p_y_mcmc, ylim = c(0, 0.15), ylab = "p_y_mcmc")
-barplot(p_y_vb, ylim = c(0, 0.15), ylab = "p_y_vb")
-barplot(setNames(dbinom(0:25, 25, ypred_m_vb[1]), 0:25), ylim = c(0, 0.15))
-barplot(setNames(dbinom(0:25, 25, ypred_m_vb[1]), 0:25), ylim = c(0, 0.15))
+plot(p_y_vb - p_y_mcmc, main = "VB-PP minus HMC-PP")
+barplot(p_y_mcmc, ylim = c(0, 0.15), ylab = "p_y_mcmc", main = "PP - HMC")
+barplot(p_y_vb, ylim = c(0, 0.15), ylab = "p_y_vb", main = "PP - VB")
 ```
 
 
 # Example Trial
 
+How might results from VB compare to results from Beta-Binomial in a trial simulation, noting that the priors and not be calibrated exactly.
 
 ```{r, fig.height = 8}
 X <- cbind(Int = 1, x = c(0, 1))
@@ -128,7 +136,8 @@ n_enro <- pmin(3000/2, n_foll + 1500/2)
 n_miss <- n_enro - n_foll
 
 # Beta-Binomial model
-sim_dat <- sim_trial(p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll, a1 = 1, b1 = 1, a2 = 1, b2 = 1)
+sim_dat <- sim_trial(p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll, 
+                     a1 = 1, b1 = 1, a2 = 1, b2 = 1)
 sim_dat <- calc_scenario_ppos(sim_dat, ppos_name = "final", post_method = "exact",
                               m1 = n_miss, m2 = n_miss,
                               l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll)
@@ -136,7 +145,7 @@ sim_dat <- calc_scenario_ppos(sim_dat, ppos_name = "final", post_method = "exact
 # Logistic model using VB
 ptail_vb <- lapply(1:nrow(sim_dat), function(i) {
   fit <- vb_logistic_n(X, sim_dat[i, c(y1, y2)], sim_dat[i, c(n1, n2)], 
-                       mu0 = c(0, 0), Sigma0 = diag(c(10, 10)), alg = "sj")
+                       mu0 = c(0, 0), Sigma0 = diag(c(1.75, 1.75)), alg = "sj")
   beta <- rmvnorm(1e3, fit$mu, fit$Sigma)
   ypred <- data.table(y1 = rbinom(1e3, sim_dat[i, l1], plogis(beta[, 1])),
                       y2 = rbinom(1e3, sim_dat[i, l2], plogis(beta[, 1] + beta[, 2])))
@@ -157,6 +166,7 @@ m <- sapply(ptail_vb, `[[`, 3)
 s <- sapply(ptail_vb, `[[`, 4)
 ```
 
+Results at the first interim analysis
 
 ```{r, fig.cap="At first analysis."}
 hist(qlogis(rbeta(1e5, sim_dat[1, a1], sim_dat[1, b1])), freq = F, breaks = 100,
@@ -183,6 +193,8 @@ curve(dbeta(x, sim_dat[1, a2], sim_dat[1, b2]), add = TRUE)
 legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
 ```
 
+Results at analysis using full sample size.
+
 ```{r, fig.cap="At final analysis."}
 hist(qlogis(rbeta(1e5, sim_dat[8, a1], sim_dat[8, b1])), freq = F, breaks = 100,
      main = "Beta-binomial posterior", xlab = "Log-odds")
@@ -199,7 +211,7 @@ legend("topleft", lty = 1, legend = "VB approx logistic model", bty = 'n')
 B <- rmvnorm(1e5, m[, 8], matrix(s[, 8], 2, 2))
 hist(plogis(B[, 1]), freq = F, breaks = 100, 
      main = 'VB approx logistic model', xlab = bquote(theta[1]))
-curve(dbeta(x, sim_dat[8], sim_dat[8, b1]), add = TRUE)
+curve(dbeta(x, sim_dat[8, a1], sim_dat[8, b1]), add = TRUE)
 legend("topright", lty = 1, legend = "Beta-binomial posterior", bty = 'n')
 
 hist(plogis(B[, 1] + B[, 2]), freq = F, breaks = 100, 

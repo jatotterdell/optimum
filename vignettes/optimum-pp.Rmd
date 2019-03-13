@@ -45,7 +45,7 @@ Wish to make a comparison between logistic regression and beta-binomial models.
 
 Suppose $\theta_1\sim\text{Beta}(a,b)$ and $\theta_2\sim\text{Beta}(c,d)$ are priors on the parameters. What priors should be set on $\beta_0$ and $\beta_1$ to get something equivalent?
 
-If $\beta_0\sim N(\mu_0,\sigma_0^2)$, $\beta_1 \sim N(\mu_1,\sigma_1^2)$ then $\beta_0+\beta_1\sim N(\mu_0+\mu_1,\sigma_0^2+\sigma_1^2)$. Additionally, if $p_0 = \text{expit}(\beta_0)$ and $p_1 = \text{expit}(\beta_0+\beta_1)$ then 
+If $\beta_0\sim N(\mu_0,\sigma_0^2)$, $\beta_1 \sim N(\mu_1,\sigma_1^2)$ are *a priori* independent then $\beta_0+\beta_1\sim N(\mu_0+\mu_1,\sigma_0^2+\sigma_1^2)$. Additionally, if $p_0 = \text{expit}(\beta_0)$ and $p_1 = \text{expit}(\beta_0+\beta_1)$ then 
 $$
 \begin{aligned}
 f(p_0|\mu_0,\sigma_0) &= 
@@ -54,7 +54,7 @@ f(p_1|\mu_0, \sigma_0, \mu_1, \sigma_1) &=
 \frac{1}{\sqrt{\sigma_0^2+\sigma_1^2}\sqrt{2\pi}}\frac{1}{p_1(1-p_1)}e^{-\frac{(\text{logit}(p_1)-\mu_0 - \mu_1)^2}{2(\sigma_0^2+\sigma_1^2)}}
 \end{aligned}
 $$
-That is, logit-normal.
+That is, logit-normal. What is the density of the difference between two logit-normals?
 
 ```{r}
 parseq <- seq(0.001, 0.999, 0.001)

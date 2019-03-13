@@ -87,6 +87,22 @@ calc_ppos <- function(a, b, c, d, m1, m2, k_ppos) {
   ypred[, c(sum(N*(P > k_ppos)) / sum(N))]
 }
 
+beta_diff_dens <- function(x, a, b, c, d, ...) {
+  require(appell)
+  if(abs(x) >= 1) stop("x must be in [-1,1]")
+  if(x > 0) {
+    return(exp(lbeta(c, b) - lbeta(a,b) - lbeta(c,d) + 
+          (b + d - 1)*log(x) + (c + b - 1)*log(1 - x)) *
+    as.numeric(appellf1(b, a + c + b + d - 2, 1 - a, b + c, 1 - x, 1 - x^2, ...)$val))
+  } else if (x == 0) {
+    return(exp(lbeta(a + c - 1, b + d - 1) - lbeta(a,b) - lbeta(c,d)))
+  } else if ( x < 0) {
+    return(exp(lbeta(a, d) - lbeta(a,b) - lbeta(c,d) +
+        (b + d - 1)*log(-x) + (a + d - 1)*log(1 + x)) *
+    as.numeric(appellf1(d, 1 - c, a + b + c + d - 2, a + d, 1 - x^2, 1 + x, ...)$val))
+  }
+}
+
 # Estimate
 # P(X > Y + delta)
 # # where X ~ Beta(a, b), Y ~ Beta(c, d)
@@ -192,7 +208,9 @@ sim_trial_dat <- function(
   enro_t <- nhpp.sim(rate = enro_rate, num.events = nmax, enro_intensity, prepend.t0 = F)
   resp_t <- enro_t + resp_delay(nmax)
   
-  d <- data.table(pid = 1:nmax,
+  d <- data.table(p1tru = p1tru,
+                  p2tru = p2tru,
+                  pid = 1:nmax,
                   enro_t = enro_t,
                   resp_t = resp_t,
                   x = as.numeric(complete_ra(nmax, num_arms = 2)))
@@ -217,8 +235,9 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
                  l = sapply(resp_cut, function(a) sum(enro_t > a)),
                  z = sapply(resp_cut, function(a) sum((enro_t > a)*y))
             )
-          }, by = x]
-  dcast(dd, resp_n ~ x, value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[l1 > min_rem | l2 > min_rem | resp_n == max(stage_n)]
+          }, by = .(p1tru, p2tru, x)]
+  dcast(dd, resp_n + p1tru + p2tru ~ x, 
+        value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[l1 > min_rem | l2 > min_rem | resp_n == max(stage_n)]
 }
 
 #' Calculate trial probabilities (posterior and predictive)
@@ -271,8 +290,8 @@ est_trial_prob <- function(
     d[i, paste0('ppos_int', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
     
     # Do final PPoS calculation
-    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1 + l1], d[i, a1 + w1 + z1], d[i, b1 + m1 + l1 - w1 - z1]),
-                 y2 = rbetabinom(ppos_sim, d[i, m2 + l2], d[i, a2 + w2 + z2], d[i, b2 + m2 + l2 - w2 - z2]))]
+    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1 + l1], d[i, a1], d[i, b1]),
+                 y2 = rbetabinom(ppos_sim, d[i, m2 + l2], d[i, a2], d[i, b2]))]
     ypred_agg <- ypred[, .N, by = .(y1, y2)]
     ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
                                           d[i, b1 + m1 + l1] - y1, 
@@ -299,12 +318,14 @@ dec_trial <- function(
   
   trial[,
         {
-          fut <- match(TRUE, get(ppos_cols[2])[-.N] < fut_k)
-          suc <- match(TRUE, get(ppos_cols[1])[-.N] > suc_k)
+          fut <- match(TRUE, get(ppos_cols[2])[-.N] < fut_k[1:(.N-1)])
+          suc <- match(TRUE, get(ppos_cols[1])[-.N] > suc_k[1:(.N-1)])
           if(any(!is.na(c(fut, suc)))) {
             res <- which.min(c(fut, suc))
             int <- min(c(fut, suc), na.rm = TRUE)
-            list(res = switch(res, "futile", "expect success"),
+            list(p1tru = p1tru[1],
+                 p2tru = p2tru[1],
+                 res = switch(res, "futile", "expect success"),
                  fin = ifelse(post_int[int] > sup_k, "success", "failure"),
                  stage = int,
                  resp = n1[int] + n2[int],
@@ -321,7 +342,9 @@ dec_trial <- function(
           } else {
             inf <- tail(post, 1) < tail(inf_k, 1)
             sup <- tail(post, 1) > tail(sup_k, 1)
-            list(res = ifelse(inf, "inferior", ifelse(sup, "superior", "inconclusive")),
+            list(p1tru = p1tru[1],
+                 p2tru = p2tru[1],
+                 res = ifelse(inf, "inferior", ifelse(sup, "superior", "inconclusive")),
                  fin = ifelse(post[.N] > sup_k, "success", "failure"),
                  stage = .N,
                  resp = n1[.N] + n2[.N],
@@ -338,6 +361,12 @@ dec_trial <- function(
           }
         }, by = sim_id]
 }
+
+
+#=======================#
+# OLD FUNCTIONS BELOW...#
+#=======================#
+
 
 
 #' Simulate Bayesian two-arm trial 

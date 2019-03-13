@@ -1,4 +1,9 @@
+Meta
+doc
 inst/doc
+inst/sim_data
+inst/rmd
+inst/stan
 # History files
 .Rhistory
 .Rapp.history
@@ -30,6 +35,5 @@ vignettes/*.pdf
 /inst/rmd/*_cache/
 /inst/rmd/*_files/
 .Rproj.user
-
 # Working files for experimentation
 R/*_test.R

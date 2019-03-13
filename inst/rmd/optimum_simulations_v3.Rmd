@@ -1,0 +1,1260 @@
+---
+title: "OPTIMUM Simulations Notes"
+subtitle: "OPTimising IMmunisation Using Mixed schedules"
+author: "Prepared by: James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+    toc_depth: 3
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.align = "center",
+	fig.height = 3,
+	fig.pos = "ht",
+	fig.width = 6,
+	message = FALSE,
+	warning = FALSE
+)
+options(stringsAsFactors = FALSE)
+
+knitr::opts_knit$set(root.dir = '../..')
+```
+
+
+```{r pkgs}
+library(ggplot2)
+library(gridExtra)
+library(data.table)
+library(tidyverse)
+library(tidybayes)
+library(kableExtra)
+library(doParallel)
+library(latex2exp)
+
+theme_set(theme_bw(base_size = 9))
+
+# source("R/binary_two_arm_functions.R")
+library(optimum)
+```
+
+
+# Sample size and accrual
+
+Original design aimed for maximum sample size of 3,000 which provides 90\% power to detect reduction from 10\% to 7\% probability.
+
+## 18-month primary end-point
+
+The end-point is food allergy at 18-months. For simplicity, we assume babies are enrolled and randomised at 0 months of age. So, no follow-up data is available until 18-months after the first infant is enrolled.
+
+Suppose accrual is 20 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 1,560 infants (78 weeks $\times$ 20 per week). Assuming the first analysis was at $n=500$, we would have about 2,000 individuals already enrolled, so 1,500 with missing information at the time of the first interim. Full follow-up would occur at about week 228 (Figure \@ref(fig:unnamed-chunk-1)).
+
+Suppose accrual is 10 infants per week, then, by the time we have follow-up on the first individual we will have enrolled 780 infants. Assuming the first analysis was at $n=500$, we would have about 1,300 enrolled, so 800 with missing information at the first interim. Full follow-up would occur at about week 378, beyond the 5-year study span.
+
+The minimum acrrual rate needed to enroll 3,000 infants within 5 years is about 11.5 per week.
+
+## 12-month primary end-point
+
+Again assuming 20 infants per week, then, by the time we have follow-up on the first individual we would have enrolled about 1,000 infants. Therefore, at any interim analysis using predictive probability of success, we would need to marginalise over about 1,000 missing responses.
+
+Assuming 10 infants per week, then by the time we have follow-up on the first individual we would have enrolled about 500 infants. Therefore, at any interim analysis using predictive probability of success, we would need to marginalise over about 500 missing responses.
+
+
+```{r, fig.cap="Assumed linear accrual rate and associated delay of information, 18-month end-point.", fig.height = 4}
+H <- function(x) as.numeric(x>0)
+
+weeks_followup <- 78
+per_week_accrual <- 20
+week <- seq(0, (52*8), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
+d$anyfollowup <- as.numeric(d$followup > 0)
+# d[d$followup == d$enrolled, ]
+
+p1 <- ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 3000, 500)) +
+  scale_x_continuous(breaks = seq(0, 500, 52), limits = c(0, 400)) +
+  scale_color_discrete("") +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.8, 0.6), panel.grid = element_blank(),
+        legend.background = element_blank())
+
+weeks_followup <- 78
+per_week_accrual <- 10
+week <- seq(0, (52*8), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
+d$anyfollowup <- as.numeric(d$followup > 0)
+
+
+p2 <- ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 3000, 500)) +
+  scale_x_continuous(breaks = seq(0, 500, 52), limits = c(0, 400)) +
+  scale_color_discrete("", guide = F) +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.2, 0.8), panel.grid = element_blank())
+
+grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "first"))
+```
+
+
+
+```{r, fig.cap="Assumed linear accrual rate and associated delay of information assuming 12-month end-point.", fig.height = 4}
+H <- function(x) as.numeric(x>0)
+
+weeks_followup <- 52
+per_week_accrual <- 20
+week <- seq(0, (52*8), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
+d$anyfollowup <- as.numeric(d$followup > 0)
+# d[d$followup == d$enrolled, ]
+
+p1 <- ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 3000, 500)) +
+  scale_x_continuous(breaks = seq(0, 500, 52), limits = c(0, 400)) +
+  scale_color_discrete("") +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.8, 0.6), panel.grid = element_blank(),
+        legend.background = element_blank())
+
+weeks_followup <- 52
+per_week_accrual <- 10
+week <- seq(0, (52*8), 1)
+
+d <- data.frame(week = week,
+                enrolled = pmin(3000, week*per_week_accrual),
+                followup = H(week - weeks_followup)*(week - weeks_followup)*per_week_accrual)
+d <- d[which(d$followup <= 3000), ]
+d$interim <- as.numeric(d$followup %in% seq(500, 3000, 500))
+d$anyfollowup <- as.numeric(d$followup > 0)
+
+
+p2 <- ggplot(d,
+       aes(x = week)) +
+  geom_line(aes(y = enrolled, colour = "Enrolled")) +
+  geom_line(aes(y = followup, colour = "Follow-up"), linetype = 2) +
+  geom_vline(data = d[d$interim == 1, ], aes(xintercept = week)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(x = week, xend = week, y = 0, yend = enrolled)) +
+  geom_segment(data = d[min(which(d$anyfollowup == 1)), ], linetype = 3,
+               aes(y = enrolled, yend = enrolled, x = 0, xend = week)) +
+  scale_y_continuous(breaks = seq(0, 3000, 500)) +
+  scale_x_continuous(breaks = seq(0, 500, 52), limits = c(0, 400)) +
+  scale_color_discrete("", guide = F) +
+  labs(x = "Week", y = "Count") +
+  theme(legend.position = c(0.2, 0.8), panel.grid = element_blank())
+
+grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "first"))
+```
+
+
+
+\clearpage
+
+# Statistical Analysis
+
+## Model
+
+Let $\theta_a$ be the probability of food allergy at 18-months amongst infants who receive the acellular pertussis vaccine at first dose, and $\theta_w$ the probability of food allergy at 18-months amongst infants received the whole-cell pertussis vaccine at first dose. We are interested in estimating $\delta = \theta_w - \theta_a$ the difference in probability (or $\delta = \ln(\theta_w/(1-\theta_w)) - \ln(\theta_a/(1-\theta_a))$ the difference in log-odds) and investigating the statistical hypothesis
+$$
+\begin{aligned}
+H_0: \delta &\geq 0 \\
+H_1: \delta &< 0
+\end{aligned}
+$$
+That is, that $\theta_w$ is no lower than $\theta_a$ versus $\theta_w$ is lower than $\theta_a$.
+
+
+## Independent Beta-Binomial Models
+
+Suppose that at each analysis $k=1,...,K$ we have data on $n_k^i$ individuals with $y_k^i$ responses for $i\in\{a,w\}$. We also assume that we have $m_k^i\geq n_k^i$ total enrolled but not all with data. The number without data is $\tilde n_k^i = m_k^i - n_k^i$. At an interim analysis we wish to impute the data for individuals enrolled but without follow-up. We denote these missing number of responses by $\tilde y_k^i$.
+
+In addition to enrolled individuals with missing data, there are the yet to be enrolled individuals making up the maximum sample size. At stage $K$ we have $n_K^i$ individuals with $y_K^i$ responses, and so for this end point we have $\tilde n_k^i = n_K^i - n_k^i$ data points missing. In either case, the posterior predictive will have the same parameters but with a different sample size parameter. Therefore in what follows we do not distinguish between the two, however, it is standard to use $\tilde n_k^i = m_k^i - n_k^i$ in deciding expected success and $\tilde n_k^i = n_K^i - n_k^i$ in deciding futility.
+
+We specify the following model for $i\in\{a,w\}$ and $k\in\{1,...,K\}$,
+$$
+\begin{aligned}
+\pi_0^i(\theta^i) &= \text{Beta}(\theta^i|a^i,b^i) \\
+f_k^i(y_k^i|\theta^i) &= \text{Binomial}(n_k^i, y_k^i) \\
+\pi_k^a(\theta^i|y_k^i) &= \text{Beta}(\theta^i|a^i + y_k^i,b^i + n_k^i - y_k^i) \\
+P_k &= \mathbb P_{\Theta^a,\Theta^w|Y_k^a,Y_k^w}(\theta^w<\theta^a) \\
+&= \int_0^1 \pi_k^a(\theta^a|y_k^a) \left[\int_0^{\theta^a} \pi_k^w(\theta^w|y_k^w)d\theta^w\right] d\theta^a\\
+\tilde f_k^i(\tilde y_k^i|y_k^i) &= \text{Beta-Binomial}(\tilde y_k^i|\tilde n_k^i, a^i+y_k^i, b^i+n_k^i-y_k^i)\\
+\tilde \pi_k^i(\theta^i|y_k^i + \tilde y_k^i) &= \text{Beta}(\theta^i|a^i+y_k^i+\tilde y_k^i, b^i+n_k^i+\tilde n_k^i - y_k^i-\tilde y_k^i)\\
+\tilde P_k &= \mathbb P_{\Theta^a,\Theta^w|Y_k^a+\tilde Y_k^a,Y_k^w+\tilde Y_k^w}(\theta^w<\theta^a) \\
+&= \int_0^1 \tilde \pi_k^a(\theta^a|y_k^a + \tilde y_k^a) \left[\int_0^{\theta^a} \tilde \pi_k^w(\theta^w|y_k^w + \tilde y_k^w)d\theta^w\right] d\theta^a \\
+\text{PPoS}_k(q) &= \mathbb E_{\tilde Y_k^a, \tilde Y_k^w|Y_k^a,Y_k^w}\left[\mathbb I\left\{\tilde P_k > q\right\}\right] \\
+&= \sum_{i=0}^{\tilde n_k^a} \sum_{j=0}^{n_k^w} \mathbb I\left\{\tilde P_k>q\right\} \tilde f_k^w(j|y_k^w)\tilde f_k^a(i|y_k^a)
+\end{aligned}
+$$
+
+The quantity $P_k$ cannot be calculated analytically but can be evaluated numerically or estimated using Monte Carlo methods. Although $\text{PPoS}_k$ can be computed analytically (assuming we have calculated the relevant $\tilde P_k$) it may still be more efficient to estimate using Monte Carlo methods for large sample sizes.
+
+In all that follows we have assumed uniform priors where $a^i=b^i=1,i=1,2$, however it would be useful to consider other priors derived from available information, including both sceptical and enthusiastic versions.
+
+
+## Decision Rules
+
+At the final analysis (full follow-up on all individuals), a terminal decision is made regarding the difference in response between the two vaccines. This decision rule declares $\delta < 0$, $\delta \geq 0$, or that the study was inconclusive.
+$$
+\delta_K(y_K) = \begin{cases}
+a_0 \text{ if } P_k \leq \underline c_K &\implies \text{accept } H_0 \\
+a_1 \text{ if } P_k \geq \overline c_K &\implies \text{accept } H_1 \\
+a_2 \text{ otherwise } &\implies \text{inconclusive/no-difference}
+\end{cases}
+$$
+At each interim analysis, a decision is made whether the study should be stopped for futility, expected success, or to continue enrolment. This decision is based on $\text{PPoS}_k(\overline c_K)$. The interim decision rule is
+$$
+\delta_k(y_k) = \begin{cases}
+a_3 \text{ if } \text{PPoS}_k(\overline c_K) < \underline \kappa_k &\implies \text{futile to continue} \\
+a_4 \text{ if } \text{PPoS}_k(\overline c_K) > \overline \kappa_k &\implies \text{expect success at interim} \\
+a_5 \text{ otherwise } &\implies \text{continue to enrol to } k+1.
+\end{cases}
+$$
+We note that, if $m_k^a + m_k^w = n_K^a+n_K^w$, that is, the number enrolled already equals the maximum sample size in each arm, then there is no point in stopping enrolment for futility or expected success as enrollment is already completed. Therefore, the interim decision only applies for stages where $m_k^a + m_k^w < n_K^a+n_K^w$ is satisfied.
+
+If we stop for futility or expected success, we would undertake a final analysis to estimate the relevant effects when remaining enrolled participants with missing data are followed-up. Note that stopping for expected success does not guarantee success when follow-up is completed, if the true effect is in agreement $H_1$ then the probability of concluding $H_1$ after stopping for expected success should be high, however, if we stop for expected success and the true effect is in agreeemnt with $H_0$, then it is less likely we will actually conclude $H_1$ after completing follow-up. The variability in these probabilities is a function of how much missing data we are forced to impute at an interim analysis, how accurate the imputation is, and the true value of the effects.
+
+\clearpage
+
+# Simulations
+
+We want to investigate the operating characteristics of the trial for varying $\theta^a$ and $\theta^w$ and determine appropriate values of the following trial parameters:
+
+  * $(\underline c_K, \overline c_K$) - the bounds used for the terminal decision rule
+  * $(\underline{\kappa}_k, \overline{\kappa}_k)$ - the bounds used for declaring futility and expected success at interim analyses
+  * The frequency and timing of interim anlayses
+  
+The operating characteristics of interest are generally
+
+  * The probability of making a wrong decision when there is and isn't an effect
+  * The probability of making the right decision when there is and isn't an effect
+  * The probability the trial is stopped early at an interim analysis
+  * The expected total sample size
+  
+## Fixed Sample size
+
+### Posterior probability
+  
+Assuming a maximum sample size of 3,000 (1,500 in each arm) at a fixed final anlaysis we estimate the following probability of success.
+
+```{r, cache=TRUE}
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.1)*dbinom(y,1500,0.07))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p1 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.03)*dbinom(y,1500,0.015))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p2 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+P <- outer(0:1500, 0:1500, function(x,y) dbinom(x, 1500, 0.28)*dbinom(y,1500,0.21))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p3 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], 1500 - x[1], x[2], 1500 - x[2]) > 0.95)))
+
+data.frame(p1tru = c(0.1, 0.03, 0.28),
+           p2tru = c(0.07, 0.015, 0.21),
+           p_1 = c(p1, p2, p3)) %>%
+  kable(booktabs = TRUE, digits = 3, escape=F,
+        col.names = c("$\\theta_w^\\star$", "$\\theta_w^\\star$", "$\\mathbb P(\\Theta_1|y_K)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+```
+
+Assuming a maximum sample size of 2,000 participants (1,000 in each group)
+
+```{r, cache=TRUE}
+nmax <- 1000
+P <- outer(0:nmax, 0:nmax, function(x,y) dbinom(x, nmax, 0.1)*dbinom(y, nmax, 0.07))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p1 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], nmax - x[1], x[2], nmax - x[2]) > 0.95)))
+
+P <- outer(0:nmax, 0:nmax, function(x,y) dbinom(x, nmax, 0.03)*dbinom(y, nmax, 0.015))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p2 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], nmax - x[1], x[2], nmax - x[2]) > 0.95)))
+
+P <- outer(0:nmax, 0:nmax, function(x,y) dbinom(x, nmax, 0.28)*dbinom(y,nmax,0.21))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p3 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], nmax - x[1], x[2], nmax - x[2]) > 0.95)))
+
+data.frame(p1tru = c(0.1, 0.03, 0.28),
+           p2tru = c(0.07, 0.015, 0.21),
+           p_1 = c(p1, p2, p3)) %>%
+  kable(booktabs = TRUE, digits = 3, escape=F,
+        col.names = c("$\\theta_w^\\star$", "$\\theta_w^\\star$", "$\\mathbb P(\\Theta_1|y_K)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+```
+
+
+```{r, cache=TRUE, eval=FALSE}
+m1 <- 750
+m2 <- 750
+P <- outer(0:m1, 0:m2, function(x,y) dbinom(x, m1, 0.1)*dbinom(y,m2,0.07))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p1 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], m1 - x[1], x[2], m2 - x[2]) > 0.95)))
+
+P <- outer(0:m1, 0:m2, function(x,y) dbinom(x, m1, 0.03)*dbinom(y,m2,0.015))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p2 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], m1 - x[1], x[2], m2 - x[2]) > 0.95)))
+
+P <- outer(0:m1, 0:m2, function(x,y) dbinom(x, m1, 0.28)*dbinom(y,m2,0.21))
+sigPid <- which(P > 1e-6, arr.ind = T)
+p3 <- sum(apply(sigPid, 1, function(x) P[x[1], x[2]] * 
+        (Vectorize(beta_ineq_approx)(x[1], m1 - x[1], x[2], m2 - x[2]) > 0.95)))
+
+data.frame(p1tru = c(0.1, 0.03, 0.28),
+           p2tru = c(0.07, 0.015, 0.21),
+           p_1 = c(p1, p2, p3)) %>%
+  kable(booktabs = TRUE, digits = 3, escape=F,
+        col.names = c("$\\theta_w^\\star$", "$\\theta_w^\\star$", "$\\mathbb P(\\Theta_1|y_K)$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+```
+
+### Frequentist Power
+
+Assuming $\theta^\star_a = 0.1$ and $\theta^\star_w$ = 0.07 with $\alpha = 0.05$ and assuming a one-sided test, to achieve:
+
+  * 90\% power we need `r round(power.prop.test(p1 = 0.1, p2 = 0.07, sig.level = 0.05, power = 0.9, alternative = "one.sided")$n)` in each group.
+  * 80\% power we need `r round(power.prop.test(p1 = 0.1, p2 = 0.07, sig.level = 0.05, power = 0.8, alternative = "one.sided")$n)` in each group.
+
+```{r, fig.height=6}
+P <- sapply(seq(0.01, 0.1, 0.01),
+  function(p) {
+    sapply(1:1500, function(n) power.prop.test(n, 0.1, p, 
+                                               alternative = "one.sided", sig.level = 0.05)$power)
+  })
+Pdat <- melt(P)
+p1 <- ggplot(Pdat, aes(Var1, value, colour = factor(Var2))) +
+  geom_line() +
+  geom_hline(yintercept = c(0.8, 0.9), lty = 2) +
+  scale_colour_viridis_d(expression(theta[w]), option = "magma", labels = seq(0.01, 0.1, 0.01)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  labs(y = "Power", x = "Sample size in each group", title = bquote(theta[a]*"="*0.1))
+
+P <- sapply(seq(0.01, 0.03, 0.005),
+  function(p) {
+    sapply(1:1500, function(n) power.prop.test(n, 0.03, p, 
+                                               alternative = "one.sided", sig.level = 0.05)$power)
+  })
+Pdat <- melt(P)
+p2 <- ggplot(Pdat, aes(Var1, value, colour = factor(Var2))) +
+  geom_line() +
+  geom_hline(yintercept = c(0.8, 0.9), lty = 2) +
+  scale_colour_viridis_d(expression(theta[w]), option = "magma", labels = seq(0.01, 0.03, 0.005)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  labs(y = "Power", x = "Sample size in each group", title = bquote(theta[a]*"="*0.03))
+
+P <- sapply(seq(0.21, 0.28, 0.01),
+  function(p) {
+    sapply(1:1500, function(n) power.prop.test(n, 0.28, p, 
+                                               alternative = "one.sided", sig.level = 0.05)$power)
+  })
+Pdat <- melt(P)
+p3 <- ggplot(Pdat, aes(Var1, value, colour = factor(Var2))) +
+  geom_line() +
+  geom_hline(yintercept = c(0.8, 0.9), lty = 2) +
+  scale_colour_viridis_d(expression(theta[w]), option = "magma", labels = seq(0.21, 0.28, 0.01)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  labs(y = "Power", x = "Sample size in each group", title = bquote(theta[a]*"="*0.28))
+
+grid.arrange(p1, p2, p3, ncol = 2)
+```
+
+
+## Adaptive Sample  Size
+
+  
+For assessing interim analyses, we assume the two accrual scenarios mentioned previously: 20 per week and 10 per week. The difference between the two (apart from the total study length required), corresponds to varying the delay in information from follow-up. As previously stated, In the 20 per week case, we expect individuals with follow-up to be about 1,500 behind the number of individuals enrolled at the time of the first interim, whereas for 10 per week we expect individuals with follow-up to be about 800 behind the number enrolled at the time of the first interim. This affects the value of $\text{PPoS}_k$ which will generally be closer to $P_k$ the larger the cohort with missing information.
+
+We also investigate the characteristics for parameters $(\underline\kappa_k,\overline\kappa_k) \in \{(0.1,0.9), (0.05,0.95)\}$ while keeping $(\underline c_K, \overline c_K) = (0.05, 0.95)$ fixed.
+
+For each scenario, we assumed a first analysis when follow-up data is available on 100 individuals in each arm, and then interim analyses for every 200 more individuals with follow-up in each arm. As interim analyses only occur prior to full enrolment of 3,000 individuals, this setup implies 4 interim analyses assuming accrual of 20 participants per week ($n_1+n_2 = 1,400$) and 5 interim analyses assuming accrual of 10 participants per week ($n_1+n_2 = 1,800$). After these interim's, enrolment will have already been completed, so it will not be possible to stop enrolment for futility or expected success.
+
+We ran 1,000 trial simulations for each scenario to obtain estimates of the values of interest.
+
+### Example
+
+As an example we simulate two triasl with $\theta_a = \theta_w = 0.1$. In this case the correct conclusion would be $\delta\geq 0$. The procession of posteriors is shown in Figure \ref{fig:unnamed-chunk-4}. One of the trials ends early for futility and the other ends early for expected success.
+
+In the tables that follow the example, estimates of the probabilities of each outcome under each scenario are presented along with expected enrolment at stopping time..
+
+  * $\mathbb P(\text{e.s})$ - probability of stopping early for expected success (early success)
+  * $\mathbb P(\text{l.s})$ - probability of declaring $H_1$ and make it to the maximum sample size (late success)
+  * $\mathbb P(\text{l.f})$ - probability of stopping early for futility (early failure)
+  * $\mathbb P(\text{l.f})$ - probability of declaring $H_0$ and make it to the maximum sample size (late failure)
+  * $\mathbb P(\text{s})$ - probability of any success
+  * $\mathbb P(\text{f})$ - probability of any failure
+  * $\mathbb P(\text{n.d})$ - probability we make it to maximum sample size and cannot conclude either $H_0$ or $H_1$ (inconclusive/no difference)
+  * $\mathbb P(\text{s.e})$ - probability of stopping before we reach maximum enrolment.
+  * $\mathbb E(\text{enrolled})$ - Expected number enrolled at stopping time
+  * $\text{Med}(\text{enrolled})$ - Median number enrolled at stopping time
+
+```{r, cache=TRUE}
+set.seed(6547654)
+n_foll <- seq(200, 3000, 400)/2
+n_enro <- pmin(3000/2, n_foll + 1500/2)
+n_miss <- n_enro - n_foll
+
+sce <- sim_scenario(100, p1tru = 0.1, p2tru = 0.1, n1int = n_foll, n2int = n_foll)
+
+sce_ppos <- calc_scenario_ppos(sce, k_ppos = 0.95, 
+                               m1 = n_miss, m2 = n_miss,
+                               l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll,
+                               post_method = "approx", pp_sim = 1e4)
+res <- decide_trial(sce_ppos)
+```
+
+
+```{r, fig.height=7, fig.cap="Two example trial procession of posteriors."}
+p1 <- plot_trial(sce_ppos[sim_id == res[res == "futile" & stage > 1, sim_id][1]], 
+                 seq(0, 0.25, 0.001)) +
+  geom_text(data = sce_ppos[sim_id == res[res == "futile" & stage > 1, sim_id][1]],
+            aes(x = 0.02, y = stage + 0.4, 
+                label = unlist(lapply(sprintf('$P_k = %.2f$, $PPoS_k^{fin} = %.2f$', 
+                                              ptail, ppos_fin), TeX)), 
+                height = NULL),
+            size = 2.5, parse = T) +
+  geom_text(data = res[res == "futile" & stage > 1][1],
+            aes(x = 0.2, y = stage + 0.4, label = paste("stop here because", res), height = NULL), 
+            size = 2.5) +
+  scale_y_continuous(breaks = 1:11) +
+  theme(legend.position = "top", panel.grid = element_blank()) +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5))
+
+p2 <- plot_trial(sce_ppos[sim_id == res[res == "expect success" & stage > 1, sim_id][1]], 
+                 seq(0, 0.25, 0.001)) +
+  geom_text(data = sce_ppos[sim_id == res[res == "expect success" & stage > 1, sim_id][1]],
+            aes(x = 0.02, y = stage + 0.4, 
+                label = unlist(lapply(sprintf('$P_k = %.2f$, $PPoS_k^{int} = %.2f$', 
+                                              ptail, ppos_int), TeX)), 
+                height = NULL),
+            size = 2.5, parse = T) +
+  geom_text(data = res[res == "expect success" & stage > 1][1],
+            aes(x = 0.2, y = stage + 0.4, label = paste("stop here because", res), height = NULL), 
+            size = 2.5) +
+  scale_y_continuous(breaks = 1:11) +
+  guides(fill = "none") +
+  theme(panel.grid = element_blank())
+
+grid.arrange(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "last"))
+```
+
+
+\clearpage
+
+## Accrual - 20 per week
+
+
+
+```{r, eval=FALSE}
+sims <- 10
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 1500/2)
+n_miss <- n_enro - n_foll
+
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(sce, m1 = n_miss, m2 = n_miss, 
+                                        l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll,
+                                        k_ppos = 0.95, post_method = "approx", pp_sim = 1e4)
+  }
+saveRDS(out, "inst/rmd/out_20_18.rds")
+
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 1000/2)
+n_miss <- n_enro - n_foll
+
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(sce, m1 = n_miss, m2 = n_miss, 
+                                        l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll,
+                                        k_ppos = 0.95, post_method = "approx", pp_sim = 1e4)
+  }
+saveRDS(out, "inst/rmd/out_20_12.rds")
+```
+
+
+### 18-month Primary End-point
+
+
+```{r}
+sims <- 1000
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 1500/2)
+n_miss <- n_enro - n_foll
+
+out_20_18 <- readRDS("inst/rmd/out_20_18.rds")
+out_dt <- rbindlist(out_20_18, idcol = "scenario")
+res1 <- rbindlist(lapply(out_20_18, decide_trial), idcol = "scenario")
+res1 <- out_dt[res1, on = .(scenario, sim_id, stage)]
+res2 <- rbindlist(lapply(out_20_18, decide_trial, fut_k = 0.05, suc_k = 0.95), idcol = "scenario")
+res2 <- out_dt[res2, on = .(scenario, sim_id, stage)]
+res3 <- rbindlist(lapply(out_20_18, decide_trial, fut_k = 0.1, suc_k = 0.95), idcol = "scenario")
+res3 <- out_dt[res3, on = .(scenario, sim_id, stage)]
+```
+
+
+
+
+
+```{r, eval=F}
+# If expect success, how many actually show it?
+P <- lapply(1:nrow(scenarios), function(i) {
+  outer(0:750,0:750,function(x,y)dbinom(x,750,scenarios[i, 'p1tru'])*dbinom(y,750,scenarios[i, 'p2tru']))
+})
+idx <- lapply(P, function(x) which(x > 1e-4))
+idxa <- lapply(P, function(x) which(x > 1e-4, arr.ind = T))
+PP <- rep(NA, nrow(res1[res == "expect success"]))
+for(i in 1:200) {
+  eg <- res1[res == "expect success"][i]
+  id <- match(eg[, p2tru], scenarios$p2tru)
+  p <- sapply(1:nrow(idxa[[id]]),
+      function(j) {
+        beta_ineq_approx(eg$a1 + idxa[[id]][j,1] - 1, eg$b1 + eg$m1 - idxa[[id]][j,1] - 1,
+                         eg$a2 + idxa[[id]][j,2] - 1, eg$b2 + eg$m2 - idxa[[id]][j,2] - 1)
+      })
+  PP[i] <- sum(P[[id]][idx[[id]]]*(p > 0.95))
+}
+
+data.table(cbind(p2 = res1[res == "expect success", p2tru], pp = PP)[1:200,])[, mean(pp), by = p2]
+```
+
+
+```{r}
+tab <- res1[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res2[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res3[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$."}
+pdat <- res1[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$."}
+pdat <- res2[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$."}
+pdat <- res3[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+\clearpage
+
+
+### 12-month Primary End-point
+
+```{r}
+sims <- 1000
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 1000/2)
+n_miss <- n_enro - n_foll
+
+out_20_12 <- readRDS("inst/rmd/out_20_12.rds")
+out_dt <- rbindlist(out_20_12, idcol = "scenario")
+res1_12 <- rbindlist(lapply(out_20_12, decide_trial), idcol = "scenario")
+res1_12 <- out_dt[res1_12, on = .(scenario, sim_id, stage)]
+res2_12 <- rbindlist(lapply(out_20_12, decide_trial, fut_k = 0.05, suc_k = 0.95), idcol = "scenario")
+res2_12 <- out_dt[res2_12, on = .(scenario, sim_id, stage)]
+res3_12 <- rbindlist(lapply(out_20_12, decide_trial, fut_k = 0.1, suc_k = 0.95), idcol = "scenario")
+res3_12 <- out_dt[res3_12, on = .(scenario, sim_id, stage)]
+
+res4_12 <- rbindlist(lapply(out_20_12, decide_trial, fut_k = seq(0.05, 0.1, length.out = 7), 
+                            suc_k = 0.95), idcol = "scenario")
+res4_12 <- out_dt[res4_12, on = .(scenario, sim_id, stage)]
+```
+
+
+
+```{r}
+tab <- res1_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res2_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res3_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$."}
+pdat <- res1_12[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$."}
+pdat <- res2_12[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$."}
+pdat <- res3_12[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(factor(n1), N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_discrete(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+\clearpage
+
+## Accrual - 10 per week
+
+### 18-month primary end-point
+
+
+```{r, eval=FALSE}
+sims <- 1000
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 800/2)
+n_miss <- n_enro - n_foll
+
+pt <- proc.time()
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(sce, m1 = n_miss, m2 = n_miss, 
+                                        l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll,
+                                        k_ppos = 0.95, post_method = "approx", pp_sim = 1e4)
+  }
+rt <- proc.time() - pt
+saveRDS(out, "inst/rmd/out_10_18_dat.rds")
+
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 500/2)
+n_miss <- n_enro - n_foll
+
+pt <- proc.time()
+registerDoParallel(cores = 4)
+out <- foreach(i = 1:nrow(scenarios), .packages = c("optimum", "data.table")) %dopar%
+  {
+         sce <- sim_scenario(sims, p1tru = scenarios[i, "p1tru"], p2tru = scenarios[i, "p2tru"],
+                             n1int = n_foll, n2int = n_foll)
+         # Get PPoS at final sample size
+         sce_ppos <- calc_scenario_ppos(sce, m1 = n_miss, m2 = n_miss, 
+                                        l1 = max(n_foll) - n_foll, l2 = max(n_foll) - n_foll,
+                                        k_ppos = 0.95, post_method = "approx", pp_sim = 1e4)
+  }
+rt <- proc.time() - pt
+saveRDS(out, "inst/rmd/out_10_12_dat.rds")
+```
+
+
+```{r}
+out_10_18 <- readRDS("inst/rmd/out_10_18_dat.rds")
+out_dt <- rbindlist(out_10_18, idcol = "scenario")
+res1 <- rbindlist(lapply(out_10_18, decide_trial), idcol = "scenario")
+res1 <- out_dt[res1, on = .(scenario, sim_id, stage)]
+res2 <- rbindlist(lapply(out_10_18, decide_trial, fut_k = 0.05, suc_k = 0.95), idcol = "scenario")
+res2 <- out_dt[res2, on = .(scenario, sim_id, stage)]
+res3 <- rbindlist(lapply(out_10_18, decide_trial, fut_k = 0.1, suc_k = 0.95), idcol = "scenario")
+res3 <- out_dt[res3, on = .(scenario, sim_id, stage)]
+```
+
+
+
+```{r}
+tab <- res1[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res2[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res3[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$."}
+pdat <- res1[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$."}
+pdat <- res2[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$."}
+pdat <- res3[, .N, keyby = .(res, n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+\clearpage
+
+
+### 12-month Primary End-point
+
+```{r}
+sims <- 1000
+scenarios <- data.frame(scenario = 1:6,
+                        p1tru = c(0.1, 0.1, 0.03, 0.03, 0.28, 0.28),
+                        p2tru = c(0.1, 0.07, 0.03, 0.015, 0.28, 0.21))
+n_foll <- c(seq(200, 3000, 400)/2)
+n_enro <- pmin(3000/2, n_foll + 500/2)
+n_miss <- n_enro - n_foll
+
+out_10_12 <- readRDS("inst/rmd/out_10_12_dat.rds")
+out_dt <- rbindlist(out_10_12, idcol = "scenario")
+res1_12 <- rbindlist(lapply(out_10_12, decide_trial), idcol = "scenario")
+res1_12 <- out_dt[res1_12, on = .(scenario, sim_id, stage)]
+res2_12 <- rbindlist(lapply(out_10_12, decide_trial, fut_k = 0.05, suc_k = 0.95), idcol = "scenario")
+res2_12 <- out_dt[res2_12, on = .(scenario, sim_id, stage)]
+res3_12 <- rbindlist(lapply(out_10_12, decide_trial, fut_k = 0.1, suc_k = 0.95), idcol = "scenario")
+res3_12 <- out_dt[res3_12, on = .(scenario, sim_id, stage)]
+
+res4_12 <- rbindlist(lapply(out_10_12, decide_trial, fut_k = seq(0.05, 0.1, length.out = 7), 
+                            suc_k = 0.95), idcol = "scenario")
+res4_12 <- out_dt[res4_12, on = .(scenario, sim_id, stage)]
+```
+
+
+
+```{r}
+tab <- res1_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res2_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r}
+tab <- res3_12[,
+    .(p_early_success = mean(res == "expect success"),
+      p_late_success = mean(res == "superior"),
+      p_early_failure = mean(res == "futile"),
+      p_late_failure = mean(res == "inferior"),
+      p_success = mean(res %in% c("expect success", "superior")),
+      p_failure = mean(res %in% c("futile", "inferior")),
+      p_inconclusive = mean(res == "inconclusive"),
+      p_stop_early = mean(stage < length(n_foll)),
+      expected_m = mean(n1 + n2 + m1 + m2),
+      median_m = median(n1 + n2 + m1 + m2)),
+    keyby = .(scenario, p1tru, p2tru)]
+kable(tab, booktabs = TRUE, escape = F, linesep = c('', '\\addlinespace'), 
+      digits = c(0,3,3, rep(2, ncol(tab) - 5), 0, 0),
+      caption = "Decision probabilities, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$",
+      col.names = c("Scenario", 
+                    "$\\theta_a^\\star$", 
+                    "$\\theta_w^\\star$",
+                    "$\\mathbb P(\\text{e.s})$",
+                    "$\\mathbb P(\\text{l.s})$",
+                    "$\\mathbb P(\\text{e.f})$",
+                    "$\\mathbb P(\\text{l.f})$",
+                    "$\\mathbb P(\\text{s})$",
+                    "$\\mathbb P(\\text{f})$",
+                    "$\\mathbb P(\\text{inc})$",
+                    "$\\mathbb P(\\text{s.e})$",
+                    "$\\mathbb E(\\text{enrolled})$",
+                    "$\\text{Med}(\\text{enrolled})$")) %>%
+  kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.9)$."}
+pdat <- res1_12[, .N, keyby = .(res, n1 = n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.05, \\overline\\kappa_k=0.95)$."}
+pdat <- res2_12[, .N, keyby = .(res, n1 = n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height = 4, fig.cap="Probability of stopping at stage, by result, $(\\underline\\kappa_k = 0.1, \\overline\\kappa_k=0.95)$."}
+pdat <- res3_12[, .N, keyby = .(res, n1 = n1+n2+m1+m2, p1tru, p2tru)]
+pdat[, lab := paste("atop(theta[a]*'='*", p1tru, ", theta[w]*'='*", p2tru, ")", sep="")]
+ggplot(pdat, aes(n1, N / sims)) + 
+  facet_grid(lab ~ res, 
+             labeller = labeller(lab = label_parsed)) + 
+  geom_bar(stat = "identity") +
+  scale_x_continuous(breaks = unique(pdat$n1)) +
+  labs(x = "Total number enrolled", y = "Estimated probability") +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```

@@ -2,8 +2,8 @@ Meta
 doc
 inst/doc
 inst/sim_data
-inst/rmd
 inst/stan
+
 # History files
 .Rhistory
 .Rapp.history

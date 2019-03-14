@@ -7,6 +7,20 @@
 dec_trial(trial, fut_k = 0.1, suc_k = 0.9, inf_k = 0.05,
   sup_k = 0.95)
 }
+\arguments{
+\item{trial}{Aggregated trial data with estimated probabilities (after call to est_trial_prob).}
+
+\item{fut_k}{Futility boundary vector. Must has as many elements as the maximum number of interims in `trial`.}
+
+\item{suc_k}{Success boundary vector.}
+
+\item{inf_k}{Inferiority cut-off.}
+
+\item{sup_k}{Superiority boundary vector.}
+}
+\value{
+A new `data.table` given the decision made and boundaries used
+}
 \description{
 Apply decision rule to trial data
 }

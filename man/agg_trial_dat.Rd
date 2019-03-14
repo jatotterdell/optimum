@@ -6,6 +6,16 @@
 \usage{
 agg_trial_dat(d, stage_n, min_rem = 10)
 }
+\arguments{
+\item{d}{The raw trial data.}
+
+\item{stage_n}{The number of responses required to trigger each interim.}
+
+\item{min_rem}{The minimum number of subjects still to be enrolled for an interim to trigger.}
+}
+\value{
+An aggregated trial dataset.
+}
 \description{
 Aggregate trial data over treatment
 }

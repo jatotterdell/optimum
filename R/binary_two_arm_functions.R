@@ -25,6 +25,10 @@ parm <- stage <- variable <- value <- grp <- NULL
 #' 
 #' @export
 dbetabinom <- function(x, n, a = 1, b = 1){
+  if(!(all(c(a, b) > 0))) stop("a and b must be > 0")
+  if(n < 1) stop("n must be > 0")
+  if(x < 0) stop("x must be >= 0")
+  
   num <- lgamma(a + b) + lgamma(n + 1) + lgamma(x + a) + lgamma(n - x + b)
   den <- lgamma(a) + lgamma(b) + lgamma(x + 1) + lgamma(n - x + 1) + lgamma(n + a + b)
   prob <- exp(num - den)
@@ -58,6 +62,10 @@ plot_beta_norm <- function(a, b, ...) {
 #' 
 #' @export
 rbetabinom <- function(n, m, a = 1, b = 1) {
+  if(!(all(c(a, b) > 0))) stop("a and b must be > 0")
+  if(!(all(c(n, m) > 0))) stop("n and m must be > 0")
+  if(x < 0) stop("x must be >= 0")
+  
   stats::rbinom(n, m, stats::rbeta(n, a, b))
 }
 
@@ -77,6 +85,9 @@ rbetabinom <- function(n, m, a = 1, b = 1) {
 #' 
 #' @export
 calc_ppos <- function(a, b, c, d, m1, m2, k_ppos) {
+  if(!(all(c(a, b, c, d, m1, m2) > 0))) stop("a, b, c, d, m1, m2 must be > 0")
+  if(k_ppos < 0 | k_ppos > 1) stop("k_ppos must be in [0, 1]")
+  
   y1pred <- rbetabinom(10000, m1, a, b)
   y2pred <- rbetabinom(10000, m2, c, d)
   ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, data.table::.N, keyby = list(y1pred, y2pred)]
@@ -89,7 +100,10 @@ calc_ppos <- function(a, b, c, d, m1, m2, k_ppos) {
 
 beta_diff_dens <- function(x, a, b, c, d, ...) {
   require(appell)
+  
   if(abs(x) >= 1) stop("x must be in [-1,1]")
+  if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
+  
   if(x > 0) {
     return(exp(lbeta(c, b) - lbeta(a,b) - lbeta(c,d) + 
           (b + d - 1)*log(x) + (c + b - 1)*log(1 - x)) *
@@ -130,6 +144,9 @@ beta_diff_dens <- function(x, a, b, c, d, ...) {
 #' 
 #' @export
 beta_ineq <- function(a, b, c, d, delta = 0, ...) {
+  
+  if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
+  
   integrand <- function(x) { stats::dbeta(x, a, b)*stats::pbeta(x - delta, c, d) }
   tryCatch(
     pracma::quadgk(integrand, delta, 1, ...),
@@ -152,6 +169,8 @@ beta_ineq <- function(a, b, c, d, delta = 0, ...) {
 #' 
 #' @export
 beta_ineq_approx <- function(a, b, c, d, delta = 0) {
+  if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
+  
   m1 <- a / (a + b)
   v1 <- a*b / ( (a + b)^2 * (a + b + 1))
   m2 <- c / (c + d)
@@ -177,6 +196,8 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
 #' 
 #' @export
 beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
+  if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
+  
   X <- stats::rbeta(sims, a, b)
   Y <- stats::rbeta(sims, c, d)
   mean(X > Y + delta)
@@ -205,6 +226,9 @@ sim_trial_dat <- function(
   require(data.table)
   require(randomizr)
   
+  if(!(all(c(p1tru, p2tru) > 0) & all(c(p1tru, p2tru) < 1))) 
+    stop("p1tru and p2tru must be in (0,1)")
+  
   enro_t <- nhpp.sim(rate = enro_rate, num.events = nmax, enro_intensity, prepend.t0 = F)
   resp_t <- enro_t + resp_delay(nmax)
   
@@ -222,6 +246,10 @@ sim_trial_dat <- function(
 
 #' Aggregate trial data over treatment
 #' 
+#' @param d The raw trial data.
+#' @param stage_n The number of responses required to trigger each interim.
+#' @param min_rem The minimum number of subjects still to be enrolled for an interim to trigger.
+#' @return An aggregated trial dataset.
 #' @export
 agg_trial_dat <- function(d, stage_n, min_rem = 10) {
   resp_cut <- sort(d[, resp_t])[stage_n]
@@ -259,6 +287,11 @@ est_trial_prob <- function(
   post_method = "approx",
   a1 = 1, b1 = 1, a2 = 1, b2 = 1
 ) {
+  if(!(all(c(a1, b1, a2, b2) > 0))) 
+    stop("a1, b1, a2, b2 must be > 0")
+  if(!post_method %in% c("exact", "approx", "sim")) 
+    stop("post_method must be 'exact', 'approx', or 'sim'.")
+  
   # What method used to estimate posterior probability?
   calc_post <- switch(post_method,
                       "exact" = beta_ineq,
@@ -304,6 +337,12 @@ est_trial_prob <- function(
 
 #' Apply decision rule to trial data
 #' 
+#' @param trial Aggregated trial data with estimated probabilities (after call to est_trial_prob).
+#' @param fut_k Futility boundary vector. Must has as many elements as the maximum number of interims in `trial`.
+#' @param suc_k Success boundary vector.
+#' @param inf_k Inferiority cut-off.
+#' @param sup_k Superiority boundary vector.
+#' @return A new `data.table` given the decision made and boundaries used
 #' @export
 dec_trial <- function(
   trial,

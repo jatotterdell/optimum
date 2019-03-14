@@ -357,9 +357,9 @@ dec_trial <- function(
   max_stage <- trial[, .N, by = sim_id][, max(N)]
   
   if (length(fut_k) == 1)
-    fut_k <- rep(fut_k, max_stage)
+    fut_k <- rep(fut_k, max_stage - 1)
   if (length(suc_k) == 1)
-    suc_k <- rep(suc_k, max_stage)
+    suc_k <- rep(suc_k, max_stage - 1)
   if (length(fut_k) < (max_stage - 1))
     stop("fut_k has too few elements")
   if (length(suc_k) < (max_stage - 1))

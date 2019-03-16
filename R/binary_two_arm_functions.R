@@ -26,8 +26,8 @@ parm <- stage <- variable <- value <- grp <- NULL
 #' @export
 dbetabinom <- function(x, n, a = 1, b = 1){
   if(!(all(c(a, b) > 0))) stop("a and b must be > 0")
-  if(n < 1) stop("n must be > 0")
-  if(x < 0) stop("x must be >= 0")
+  if(any(n < 1)) stop("n must be > 0")
+  if(any(x < 0)) stop("x must be >= 0")
   
   num <- lgamma(a + b) + lgamma(n + 1) + lgamma(x + a) + lgamma(n - x + b)
   den <- lgamma(a) + lgamma(b) + lgamma(x + 1) + lgamma(n - x + 1) + lgamma(n + a + b)
@@ -64,7 +64,6 @@ plot_beta_norm <- function(a, b, ...) {
 rbetabinom <- function(n, m, a = 1, b = 1) {
   if(!(all(c(a, b) > 0))) stop("a and b must be > 0")
   if(!(all(c(n, m) > 0))) stop("n and m must be > 0")
-  if(x < 0) stop("x must be >= 0")
   
   stats::rbinom(n, m, stats::rbeta(n, a, b))
 }
@@ -265,7 +264,7 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
             )
           }, by = .(p1tru, p2tru, x)]
   dcast(dd, resp_n + p1tru + p2tru ~ x, 
-        value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[l1 > min_rem | l2 > min_rem | resp_n == max(stage_n)]
+        value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[(l1 + l2) > min_rem | resp_n == max(stage_n)]
 }
 
 #' Calculate trial probabilities (posterior and predictive)

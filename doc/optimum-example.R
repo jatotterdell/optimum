@@ -1,0 +1,44 @@
+## ----setup, include = FALSE----------------------------------------------
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	collapse = TRUE,
+	comment = "#>"
+)
+
+## ----pkgs----------------------------------------------------------------
+library(optimum)
+library(data.table)
+
+## ----data----------------------------------------------------------------
+simdat <- lapply(1:10, sim_trial_dat, p1tru = 0.2, p2tru = 0.1)
+aggdat <- lapply(simdat, agg_trial_dat, stage_n = c(25, 50, 75, 100))
+prbdat <- lapply(aggdat, est_trial_prob, ppos_q = c(0.95, 0.975))
+decdat1 <- rbindlist(lapply(prbdat, dec_trial, sup_k = 0.95), idcol = "sim_id")
+decdat2 <- rbindlist(lapply(prbdat, dec_trial, sup_k = 0.975), idcol = "sim_id")
+
+## ----example-------------------------------------------------------------
+head(simdat[[10]])
+head(prbdat[[10]])
+head(decdat1)
+
+## ----basic_summary-------------------------------------------------------
+dcast(decdat1[, .N, by = .(res, fin)], res ~ fin, value.var = "N", fill = 0)
+dcast(decdat2[, .N, by = .(res, fin)], res ~ fin, value.var = "N", fill = 0)
+
+## ------------------------------------------------------------------------
+dat_at_dec1 <- rbindlist(aggdat, idcol = "sim_id")[, 
+  .(sim_id,resp,n1,n2,y1,y2,m1,m2,w1,w2,l1,l2,z1,z2,a1,b1,a2,b2)][
+    decdat1, 
+  on = .(sim_id, resp)]
+dat_at_dec2 <- rbindlist(aggdat, idcol = "sim_id")[, 
+  .(sim_id,resp,n1,n2,y1,y2,m1,m2,w1,w2,l1,l2,z1,z2,a1,b1,a2,b2)][
+    decdat2, 
+  on = .(sim_id, resp)]
+
+dat_at_dec1[, .(mean1 = (a1 + w1) / (a1 + b1 + m1), 
+                mean2 = (a2 + w2) / (a2 + b2 + m2))][, .(mean(mean1), mean(mean2))]
+dat_at_dec2[, .(mean1 = (a1 + w1) / (a1 + b1 + m1), 
+                mean2 = (a2 + w2) / (a2 + b2 + m2))][, .(mean(mean1), mean(mean2))]
+

@@ -1,3 +1,6 @@
+^inst/stan$
+^inst/sim_data$
+^inst/rmd$
 ^Meta$
 ^doc$
 ^.*\.Rproj$         # Automatically added by RStudio,
@@ -8,4 +11,3 @@
 ^\.travis\.yml$     # Used for continuous integration testing with travis
 R/*_test.R          # Ignore working files
 R/*_ex.R
-inst/rmd/*_cache/   # Ignore cache files

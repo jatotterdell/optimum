@@ -254,7 +254,7 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
   resp_cut <- sort(d[, resp_t])[stage_n]
   dd <- d[,
           {
-            list(resp_n = stage_n,
+            list(resp = stage_n,
                  n = sapply(resp_cut, function(a) sum(resp_t <= a)),
                  y = sapply(resp_cut, function(a) sum((resp_t <= a)*y)),
                  m = sapply(resp_cut, function(a) sum(resp_t > a & enro_t <= a)),
@@ -263,8 +263,8 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
                  z = sapply(resp_cut, function(a) sum((enro_t > a)*y))
             )
           }, by = .(p1tru, p2tru, x)]
-  dcast(dd, resp_n + p1tru + p2tru ~ x, 
-        value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[(l1 + l2) > min_rem | resp_n == max(stage_n)]
+  dcast(dd, resp + p1tru + p2tru ~ x, 
+        value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[(l1 + l2) > min_rem | resp == max(stage_n)]
 }
 
 #' Calculate trial probabilities (posterior and predictive)

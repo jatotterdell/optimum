@@ -25,7 +25,12 @@ est_trial_prob(d, ppos_q = 0.95, ppos_sim = 1000,
 \item{b2}{Prior scale for treatment 2}
 }
 \value{
-Updates `d` inplace but also returns the updated `d`
+Updates `d` inplace but also returns the updated `d`. 
+`post` - current posterior probability, 
+`post_int` - posterior probability when follow-up enrolled individuals,
+`post_fin` - posterior probability when follow-up to maximum sample size,
+`ppos_intq` - predictive probability of success given q if follow-up enrolled individuals,
+`ppos_finq` - predictive probability of success given q if follow-up to maximum sample size,
 }
 \description{
 Calculate trial probabilities (posterior and predictive)

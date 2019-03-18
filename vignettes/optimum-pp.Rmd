@@ -54,7 +54,7 @@ f(p_1|\mu_0, \sigma_0, \mu_1, \sigma_1) &=
 \frac{1}{\sqrt{\sigma_0^2+\sigma_1^2}\sqrt{2\pi}}\frac{1}{p_1(1-p_1)}e^{-\frac{(\text{logit}(p_1)-\mu_0 - \mu_1)^2}{2(\sigma_0^2+\sigma_1^2)}}
 \end{aligned}
 $$
-That is, logit-normal. What is the density of the difference between two logit-normals?
+That is, logit-normal.
 
 ```{r}
 parseq <- seq(0.001, 0.999, 0.001)
@@ -70,7 +70,7 @@ ggplot(pdat, aes(theta, p, colour = factor(s))) +
   scale_colour_discrete(expression(sigma))
 ```
 
-So, suppose we set $\mu_0=\mu_1=0$ and $\sigma_0=\sigma_1=1$, then, on the probability scale we are specifying different priors for each parameter. So it will be impossible to have the two probabilities on the same prior. The variance of $p_1$ will always be greater than that of $p_0$.
+So, suppose we set $\mu_0=\mu_1=0$ and $\sigma_0=\sigma_1=1$, then, on the probability scale we are specifying different priors for each parameter. To make these priors equivalent on the probability scale we must specify a correlated prior such that $\sigma_0^2 + \sigma_1^2 + 2\sigma_{01} = \sigma_0^2$ which implies $\sigma_1^2 = -2\sigma_{01}$. So if $\sigma_1^2 = 1$ then $\sigma_{01} = -1/2$. The alternative is to specify the prior directly on $\theta_1+\theta_2$ and work with this random variable instead.
 
 ```{r}
 ggplot(data.frame(x = c(0, 1)), aes(x)) +
@@ -83,11 +83,7 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
   xlim(0,1) + ylim(0, 3)
 ```
 
-
-Suppose we approximate the posterior of $\beta$ in a logistic regression model by some member of the Normal family $q(\beta)$. We are interested in predicting the new Bernoulli random variable
-$$
-\mathbb P_{\tilde Y|Y}(Y=1) = \int \text{expit}(x^\top\beta)N(\beta|\mu,\Sigma)d\beta
-$$
+---
 
 Check how well VB posterior predictive alligns with posterior predictive from long HMC chain.
 

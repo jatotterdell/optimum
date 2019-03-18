@@ -63,7 +63,7 @@ plot_beta_norm <- function(a, b, ...) {
 #' @export
 rbetabinom <- function(n, m, a = 1, b = 1) {
   if(!(all(c(a, b) > 0))) stop("a and b must be > 0")
-  if(!(all(c(n, m) > 0))) stop("n and m must be > 0")
+  if(!(all(n > 0))) stop("n must be > 0")
   
   stats::rbinom(n, m, stats::rbeta(n, a, b))
 }
@@ -277,7 +277,13 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
 #' @param b1 Prior scale for treatment 1
 #' @param a2 Prior shape for treatment 2
 #' @param b2 Prior scale for treatment 2
-#' @return Updates `d` inplace but also returns the updated `d`
+#' @return Updates `d` inplace but also returns the updated `d`. 
+#' `post` - current posterior probability, 
+#' `post_int` - posterior probability when follow-up enrolled individuals,
+#' `post_fin` - posterior probability when follow-up to maximum sample size,
+#' `ppos_intq` - predictive probability of success given q if follow-up enrolled individuals,
+#' `ppos_finq` - predictive probability of success given q if follow-up to maximum sample size,
+#' 
 #' @export
 est_trial_prob <- function(
   d, 

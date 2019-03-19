@@ -83,14 +83,20 @@ rbetabinom <- function(n, m, a = 1, b = 1) {
 #' @return The predicted probability of success
 #' 
 #' @export
-calc_ppos <- function(a, b, c, d, m1, m2, k_ppos) {
+calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, post_method = "exact") {
+  require(data.table)
   if(!(all(c(a, b, c, d, m1, m2) > 0))) stop("a, b, c, d, m1, m2 must be > 0")
   if(k_ppos < 0 | k_ppos > 1) stop("k_ppos must be in [0, 1]")
   
+  calc_post <- switch(post_method,
+                      "exact" = beta_ineq,
+                      "approx" = beta_ineq_approx,
+                      "sim" = beta_ineq_sim)
+  
   y1pred <- rbetabinom(10000, m1, a, b)
   y2pred <- rbetabinom(10000, m2, c, d)
-  ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, data.table::.N, keyby = list(y1pred, y2pred)]
-  ypred[, `:=`(P = Vectorize(beta_ineq)(a + y1pred, 
+  ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, .N, keyby = list(y1pred, y2pred)]
+  ypred[, `:=`(P = Vectorize(calc_post)(a + y1pred, 
                                     b + m1 - y1pred, 
                                     c + y2pred,
                                     d + m2 - y2pred))]
@@ -356,8 +362,7 @@ dec_trial <- function(
   fut_k = 0.1,
   suc_k = 0.9,
   inf_k = 0.05,
-  sup_k = 0.95,
-  ppos = TRUE) {
+  sup_k = 0.95) {
   
   # Use the ppos column which matches sup_k
   ppos_cols <- grep(paste0(sup_k, "$"), names(trial), value = T)
@@ -415,6 +420,68 @@ dec_trial <- function(
                  suc_k = paste(unique(suc_k), collapse = ","),
                  inf_k = inf_k,
                  sup_k = sup_k)
+          }
+        }, by = sim_id]
+}
+
+
+dec_trial_post <- function(
+  trial,
+  inf_k = 0.05,
+  sup_k = 0.95  
+) {
+  
+  max_stage <- trial[, .N, by = sim_id][, max(N)]
+  
+  if (length(inf_k) == 1)
+    inf_k <- rep(inf_k, max_stage)
+  if (length(sup_k) == 1)
+    sup_k <- rep(sup_k, max_stage)
+  if (length(inf_k) < max_stage)
+    stop("inf_k has too few elements")
+  if (length(sup_k) < max_stage)
+    stop("sup_k has too few elements")
+  
+  trial[,
+        {
+          inf <- match(TRUE, post[1:(.N-1)] < inf_k[1:(.N-1)])
+          sup <- match(TRUE, post[1:(.N-1)] > sup_k[1:(.N-1)])
+          if(any(!is.na(c(inf, sup)))) {
+            res <- which.min(c(inf, sup))
+            int <- min(c(inf, sup), na.rm = TRUE)
+            list(p1tru = p1tru[1],
+                 p2tru = p2tru[1],
+                 res = switch(res, "early failure", "early success"),
+                 fin = ifelse(post_fin[.N] > sup_k[.N], "success", "failure"),
+                 stage = int,
+                 n1 = n1[int],
+                 n2 = n2[int],
+                 y1 = y1[int],
+                 y2 = y2[int],
+                 enro = n1[int] + n2[int] + m1[int] + m2[int],
+                 post = post[int],
+                 post_int = post_int[int],
+                 post_fin = post_fin[int],
+                 inf_k = paste(unique(inf_k), collapse = ","), 
+                 sup_k = paste(unique(sup_k), collapse = ","))
+          } else {
+            inf <- tail(post, 1) < tail(inf_k, 1)
+            sup <- tail(post, 1) > tail(sup_k, 1)
+            list(p1tru = p1tru[1],
+                 p2tru = p2tru[1],
+                 res = ifelse(inf, "inferior", ifelse(sup, "superior", "inconclusive")),
+                 fin = ifelse(post[.N] > sup_k[.N], "success", "failure"),
+                 stage = .N,
+                 n1 = n1[.N],
+                 n2 = n2[.N],
+                 y1 = y1[.N],
+                 y2 = y2[.N],
+                 enro = n1[.N] + n2[.N] + m1[.N] + m2[.N],
+                 post = post[.N],
+                 post_int = post_int[.N],
+                 post_fin = post_fin[.N],
+                 inf_k = paste(unique(inf_k), collapse = ","), 
+                 sup_k = paste(unique(sup_k), collapse = ","))
           }
         }, by = sim_id]
 }

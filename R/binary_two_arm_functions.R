@@ -316,26 +316,28 @@ est_trial_prob <- function(
   d[, post_fin := post[.N]]
   
   # Calculate PPoS at each interim for currently enrolled and complete enrolment
-  for(i in 1:(nrow(d) - 1)) {
-    # Do interim PPoS calculation
-    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1], d[i, a1], d[i, b1]),
-                 y2 = rbetabinom(ppos_sim, d[i, m2], d[i, a2], d[i, b2]))]
-    ypred_agg <- ypred[, .N, by = .(y1, y2)]
-    ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
-                                          d[i, b1 + m1] - y1, 
-                                          d[i, a2] + y2,
-                                          d[i, b2 + m2] - y2)]
-    d[i, paste0('ppos_int', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
-    
-    # Do final PPoS calculation
-    ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1 + l1], d[i, a1], d[i, b1]),
-                 y2 = rbetabinom(ppos_sim, d[i, m2 + l2], d[i, a2], d[i, b2]))]
-    ypred_agg <- ypred[, .N, by = .(y1, y2)]
-    ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
-                                          d[i, b1 + m1 + l1] - y1, 
-                                          d[i, a2] + y2,
-                                          d[i, b2 + m2 + l2] - y2)]
-    d[i, paste0('ppos_fin', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
+  if(!is.null(ppos_q)) {
+    for(i in 1:(nrow(d) - 1)) {
+      # Do interim PPoS calculation
+      ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1], d[i, a1], d[i, b1]),
+                   y2 = rbetabinom(ppos_sim, d[i, m2], d[i, a2], d[i, b2]))]
+      ypred_agg <- ypred[, .N, by = .(y1, y2)]
+      ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
+                                            d[i, b1 + m1] - y1, 
+                                            d[i, a2] + y2,
+                                            d[i, b2 + m2] - y2)]
+      d[i, paste0('ppos_int', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
+      
+      # Do final PPoS calculation
+      ypred[, `:=`(y1 = rbetabinom(ppos_sim, d[i, m1 + l1], d[i, a1], d[i, b1]),
+                   y2 = rbetabinom(ppos_sim, d[i, m2 + l2], d[i, a2], d[i, b2]))]
+      ypred_agg <- ypred[, .N, by = .(y1, y2)]
+      ypred_agg[, P := Vectorize(calc_post)(d[i, a1] + y1, 
+                                            d[i, b1 + m1 + l1] - y1, 
+                                            d[i, a2] + y2,
+                                            d[i, b2 + m2 + l2] - y2)]
+      d[i, paste0('ppos_fin', ppos_q) := ypred_agg[, lapply(ppos_q, function(q) sum(N*(P > q)) / sum(N))]]
+    } 
   }
   return(d)
 }
@@ -354,11 +356,12 @@ dec_trial <- function(
   fut_k = 0.1,
   suc_k = 0.9,
   inf_k = 0.05,
-  sup_k = 0.95) {
+  sup_k = 0.95,
+  ppos = TRUE) {
   
   # Use the ppos column which matches sup_k
   ppos_cols <- grep(paste0(sup_k, "$"), names(trial), value = T)
-  if(length(ppos_cols) == 0) stop("sup_k did not match any columns in trial.")
+  if(length(ppos_cols) == 0 & ppos) stop("sup_k did not match any columns in trial.")
   max_stage <- trial[, .N, by = sim_id][, max(N)]
   
   if (length(fut_k) == 1)

@@ -29,7 +29,7 @@ Basic usage
 ```{r data}
 simdat <- lapply(1:10, sim_trial_dat, p1tru = 0.2, p2tru = 0.1)
 aggdat <- lapply(simdat, agg_trial_dat, stage_n = c(25, 50, 75, 100))
-prbdat <- lapply(aggdat, est_trial_prob, ppos_q = c(0.95, 0.975))
+prbdat <- lapply(aggdat, est_trial_prob, ppos_q = c(0.95, 0.975), post_method = "approx")
 decdat1 <- rbindlist(lapply(prbdat, dec_trial, sup_k = 0.95), idcol = "sim_id")
 decdat2 <- rbindlist(lapply(prbdat, dec_trial, sup_k = 0.975), idcol = "sim_id")
 ```

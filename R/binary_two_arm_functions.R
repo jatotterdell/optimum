@@ -333,7 +333,7 @@ est_trial_prob <- function(
            a2 = a2 + y2,
            b2 = a2 + n2 - y2)]
   # Calculate posterior probabilities given current data and assuming follow-up of currently enrolled
-  d[, `:=`(post = calc_post(a1[1:.N], b1[1:.N], a2[1:.N], b2[1:.N]),
+  d[, `:=`(post = calc_post(a1, b1, a2, b2),
            post_int = calc_post(a1 + w1, b1 + m1 - w1, a2 + w2, b2 + m2 - w2))]
   d[, post_fin := post[.N]]
   

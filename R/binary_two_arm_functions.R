@@ -203,9 +203,14 @@ beta_ineq_approx <- function(a, b, c, d, delta = 0) {
 beta_ineq_sim <- function(a, b, c, d, delta = 0, sims = 10000) {
   if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
   
-  X <- stats::rbeta(sims, a, b)
-  Y <- stats::rbeta(sims, c, d)
-  mean(X > Y + delta)
+  lens <- unlist(lapply(list(a, b, c, d), length))
+  if(any(max(lens)- min(lens) != 0)) stop("a, b, c, d must be same len")
+  
+  X <- lapply(1:length(a), function(x) stats::rbeta(sims, a[x], b[x]))
+  Y <- lapply(1:length(a), function(x) stats::rbeta(sims, c[x], d[x]))
+  
+  means <- lapply(1:length(a), function(x) mean(X[[x]] > Y[[x]] + delta))
+  unlist(means)
 }
 
 #' Simulate trial data using Poisson process for accrual rate
@@ -227,7 +232,7 @@ sim_trial_dat <- function(
   enro_intensity = function(t) 1,
   resp_delay = function(n) runif(n)
 ) {
-  require(poisson)
+  library(poisson)
   require(data.table)
   require(randomizr)
   
@@ -258,6 +263,15 @@ sim_trial_dat <- function(
 #' @export
 agg_trial_dat <- function(d, stage_n, min_rem = 10) {
   resp_cut <- sort(d[, resp_t])[stage_n]
+  
+  # for all cutpoints, by group
+  # n participants with resp_time <= cut point
+  # y participants with events with resp_time <= cut point
+  # m participants enrolled but without resp_time available at cut point
+  # w participants with events that are enrolled but without resp_time available at cut point 
+  # l participants with enrolment occurring after cut point
+  # z participants with events with enrolment occurring after cut point
+  
   dd <- d[,
           {
             list(resp = stage_n,
@@ -269,6 +283,8 @@ agg_trial_dat <- function(d, stage_n, min_rem = 10) {
                  z = sapply(resp_cut, function(a) sum((enro_t > a)*y))
             )
           }, by = .(p1tru, p2tru, x)]
+  
+  # spread to wide.
   dcast(dd, resp + p1tru + p2tru ~ x, 
         value.var = c("n", "y", "m", "w", "l", "z"), sep = "")[(l1 + l2) > min_rem | resp == max(stage_n)]
 }
@@ -362,11 +378,11 @@ dec_trial <- function(
   fut_k = 0.1,
   suc_k = 0.9,
   inf_k = 0.05,
-  sup_k = 0.95) {
+  sup_k = 0.95, ...) {
   
   # Use the ppos column which matches sup_k
   ppos_cols <- grep(paste0(sup_k, "$"), names(trial), value = T)
-  if(length(ppos_cols) == 0 & ppos) stop("sup_k did not match any columns in trial.")
+  if(length(ppos_cols) == 0) stop("sup_k did not match any columns in trial.")
   max_stage <- trial[, .N, by = sim_id][, max(N)]
   
   if (length(fut_k) == 1)
@@ -378,6 +394,7 @@ dec_trial <- function(
   if (length(suc_k) < (max_stage - 1))
     stop("suc_k has too few elements")
   
+
   trial[,
         {
           fut <- match(TRUE, get(ppos_cols[2])[-.N] < fut_k[1:(.N-1)])

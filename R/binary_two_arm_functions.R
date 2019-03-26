@@ -84,7 +84,7 @@ rbetabinom <- function(n, m, a = 1, b = 1) {
 #' 
 #' @export
 calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, post_method = "exact") {
-  require(data.table)
+  library(data.table)
   if(!(all(c(a, b, c, d, m1, m2) > 0))) stop("a, b, c, d, m1, m2 must be > 0")
   if(k_ppos < 0 | k_ppos > 1) stop("k_ppos must be in [0, 1]")
   
@@ -104,7 +104,7 @@ calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, post_method = "exact") {
 }
 
 beta_diff_dens <- function(x, a, b, c, d, ...) {
-  require(appell)
+  library(appell)
   
   if(abs(x) >= 1) stop("x must be in [-1,1]")
   if(!(all(c(a, b, c, d) > 0))) stop("a, b, c, d must be > 0")
@@ -233,8 +233,8 @@ sim_trial_dat <- function(
   resp_delay = function(n) runif(n)
 ) {
   library(poisson)
-  require(data.table)
-  require(randomizr)
+  library(data.table)
+  library(randomizr)
   
   if(!(all(c(p1tru, p2tru) > 0) & all(c(p1tru, p2tru) < 1))) 
     stop("p1tru and p2tru must be in (0,1)")

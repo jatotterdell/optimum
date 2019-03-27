@@ -230,7 +230,8 @@ sim_trial_dat <- function(
   nmax = 100,
   enro_rate = 1,
   enro_intensity = function(t) 1,
-  resp_delay = function(n) runif(n)
+  resp_delay = function(n) runif(n),
+  simple_rand = TRUE
 ) {
   library(poisson)
   library(data.table)
@@ -241,6 +242,9 @@ sim_trial_dat <- function(
   
   enro_t <- nhpp.sim(rate = enro_rate, num.events = nmax, enro_intensity, prepend.t0 = F)
   resp_t <- enro_t + resp_delay(nmax)
+  x <- ifelse(simple_rand,
+              as.numeric(complete_ra(nmax, num_arms = 2)),
+              rep(c(0, 1), times = nmax/2))
   
   d <- data.table(p1tru = p1tru,
                   p2tru = p2tru,

@@ -508,6 +508,36 @@ dec_trial_post <- function(
 }
 
 
+
+sim_scenario_data <- function(
+  file.path,
+  sims, nmax, stage_n, 
+  ppos_q, p1tru, p2tru, 
+  enro_rate, enro_intensity, resp_delay) {
+  
+  # Setup parallelisation
+  cl <- makeCluster(4)
+  invisible(clusterCall(cl, function() {library(optimum)}))
+  clusterExport(cl, list("stage_n", "ppos_q", "sims", "p1tru", "p2tru", "resp_delay"))
+  
+  # Generate raw data
+  for(k in 1:length(p2tru)) {
+    dat <- parLapply(cl, 1:sims,
+             function(i) {
+               sim_trial_dat(sim_id = i, p1tru = p1tru[k], p2tru = p2tru[k],
+                             nmax = nmax, enro_rate = enro_rate, 
+                             enro_intensity = enro_intensity, resp_delay = resp_delay, 
+                             simple_rand = FALSE)
+             })
+    dat_agg <- parLapply(cl, dat, agg_trial_dat, stage_n = stage_n, min_rem = 100)
+    rm(dat)
+    dat_agg <- parLapply(cl, dat_agg, est_trial_prob, ppos_q = ppos_q)
+    saveRDS(dat_agg, paste0(file.path, k, ".rds"))
+    rm(dat_agg)
+  }
+}
+
+
 #=======================#
 # OLD FUNCTIONS BELOW...#
 #=======================#

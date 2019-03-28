@@ -2,6 +2,8 @@ Meta
 inst/doc
 inst/sim_data
 inst/stan
+src/*.o
+src/*.hpp
 
 # History files
 .Rhistory

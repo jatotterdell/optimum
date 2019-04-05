@@ -83,7 +83,8 @@ rbetabinom <- function(n, m, a = 1, b = 1) {
 #' @return The predicted probability of success
 #' 
 #' @export
-calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, post_method = "exact") {
+calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, 
+                      post_method = "exact", post_sim = 1e4) {
   library(data.table)
   if(!(all(c(a, b, c, d, m1, m2) > 0))) stop("a, b, c, d, m1, m2 must be > 0")
   if(k_ppos < 0 | k_ppos > 1) stop("k_ppos must be in [0, 1]")
@@ -93,8 +94,8 @@ calc_ppos <- function(a, b, c, d, m1, m2, k_ppos, post_method = "exact") {
                       "approx" = beta_ineq_approx,
                       "sim" = beta_ineq_sim)
   
-  y1pred <- rbetabinom(10000, m1, a, b)
-  y2pred <- rbetabinom(10000, m2, c, d)
+  y1pred <- rbetabinom(post_sim, m1, a, b)
+  y2pred <- rbetabinom(post_sim, m2, c, d)
   ypred <- data.table(y1pred = y1pred, y2pred = y2pred)[, .N, keyby = list(y1pred, y2pred)]
   ypred[, `:=`(P = Vectorize(calc_post)(a + y1pred, 
                                     b + m1 - y1pred, 
